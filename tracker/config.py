@@ -30,3 +30,9 @@ class Config:
     # 0 shows the browser window while it works: useful when a store starts blocking.
     BROWSER_HEADLESS = _flag("BROWSER_HEADLESS", True)
     SEARCH_MAX_PER_STORE = int(os.environ.get("SEARCH_MAX_PER_STORE", "24"))
+    # 0 stops the automatic price checks (the "Check prices now" button still works).
+    SCHEDULER = _flag("SCHEDULER", True)
+    # Alert channels. The addresses to notify are set in Settings; the credentials stay here.
+    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
+    GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
+    CALLMEBOT_API_KEY = os.environ.get("CALLMEBOT_API_KEY", "").strip()

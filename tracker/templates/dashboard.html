@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
     <h1 class="text-2xl font-semibold">Dashboard</h1>
-    <p class="muted mt-1 text-sm">Price drops, lows and alerts will show here once listings are being tracked.</p>
+    <p class="muted mt-1 text-sm">What changed on the laptops you are tracking.</p>
 </header>
 
 <div class="grid gap-4 sm:grid-cols-3">
@@ -16,13 +16,57 @@
     <div class="card p-5">
         <p class="muted text-xs font-medium">Tracked laptops</p>
         <p class="mt-1 text-3xl font-semibold tabular-nums">{{ tracked }}</p>
-        <p class="muted mt-1 text-xs">Tracking starts after the first search</p>
+        <p class="muted mt-1 text-xs">{% if tracked %}{{ at_low|length }} at {{ 'its' if at_low|length == 1 else 'their' }} lowest price so far{% else %}Tick listings in a hunt to track them{% endif %}</p>
     </div>
     <div class="card p-5">
         <p class="muted text-xs font-medium">Check frequency</p>
-        <p class="mt-1 text-3xl font-semibold tabular-nums">{{ interval }} h</p>
-        <p class="muted mt-1 text-xs">Scheduled checks are not running yet</p>
+        <p class="mt-1 text-3xl font-semibold tabular-nums">{{ schedule.interval }} h</p>
+        <p class="muted mt-1 text-xs">{% if schedule.running %}Checking prices now{% elif not schedule.enabled %}Automatic checks are switched off{% elif tracked %}Next check {{ schedule.next_at|when }} · last {{ schedule.last_at|when }}{% else %}Starts once something is tracked{% endif %}</p>
     </div>
+</div>
+
+<div class="mt-8 grid gap-6 lg:grid-cols-2">
+    <section>
+        <h2 class="mb-3 text-base font-semibold">Recent alerts</h2>
+        {% if feed %}
+        <ul class="card divide-y divide-slate-200 dark:divide-slate-800">
+            {% for a in feed %}
+            <li class="px-5 py-3.5 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="badge chip-match">{{ a.label }}</span>
+                    <span class="muted text-xs tabular-nums">{{ a.sent_at|when }}</span>
+                </div>
+                <p class="mt-1.5 line-clamp-1 font-medium" title="{{ a.title }}">{% if a.url %}<a class="hover:underline" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">{{ a.title }}</a>{% else %}{{ a.title or 'A listing that is no longer kept' }}{% endif %}</p>
+                <p class="muted mt-0.5 text-xs">{{ a.detail }}{% if a.retailer %} · {{ catalog.RETAILER_LABELS.get(a.retailer, a.retailer) }}{% endif %} · sent to {{ a.channel|replace('feed', 'this page') }}{% for problem in a.problems %} · {{ problem }}{% endfor %}</p>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="card border-dashed px-6 py-10 text-center">
+            <p class="muted text-sm">No alerts yet. They appear when a price check finds a new low, a target price, a drop or a restock on a tracked listing.</p>
+        </div>
+        {% endif %}
+    </section>
+    <section>
+        <h2 class="mb-3 text-base font-semibold">Biggest drops since the last check</h2>
+        {% if drops %}
+        <ul class="card divide-y divide-slate-200 dark:divide-slate-800">
+            {% for l in drops %}
+            <li class="flex items-center justify-between gap-4 px-5 py-3.5 text-sm">
+                <a class="line-clamp-1 font-medium hover:underline" href="{{ l.url }}" target="_blank" rel="noopener noreferrer" title="{{ l.title }}">{{ l.title }}</a>
+                <span class="shrink-0 text-right tabular-nums">
+                    <span class="font-semibold">{{ l.price_inr|inr }}</span>
+                    <span class="block text-xs font-medium text-emerald-600 dark:text-emerald-400">▼ {{ l.change_inr|abs|inr }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="card border-dashed px-6 py-10 text-center">
+            <p class="muted text-sm">No tracked price has fallen since its previous check.</p>
+        </div>
+        {% endif %}
+    </section>
 </div>
 
 <section class="mt-8">

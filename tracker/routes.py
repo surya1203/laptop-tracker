@@ -1,9 +1,11 @@
 """Pages and form handlers."""
+import json
 import re
+from datetime import datetime, timezone
 
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 
-from . import hunts, listings, search
+from . import alerts, checker, hunts, listings, scheduler, search
 from .db import get_db, get_setting, set_setting
 
 TABS = ("match", "near", "miss", "tracked")
@@ -18,15 +20,39 @@ def _hunt_or_404(hunt_id):
     return hunt
 
 
+def _schedule():
+    """What the pages say about price checks: how often, the last one, the next one."""
+    db = get_db()
+    try:
+        result = json.loads(get_setting("last_check_result") or "{}")
+    except ValueError:
+        result = {}
+    due = scheduler.next_check(db)
+    return {
+        "interval": scheduler.interval_hours(db),
+        "last_at": get_setting("last_check_at"),
+        "result": result,
+        "next_at": max(due, datetime.now(timezone.utc)).isoformat(timespec="seconds"),
+        "enabled": current_app.config["SCHEDULER"],
+        "running": checker.RUN["running"],
+    }
+
+
 @bp.route("/")
 def dashboard():
     all_hunts = hunts.all_hunts()
+    groups = listings.tracked()
+    tracked = [listing for group in groups for listing in group["listings"]]
+    drops = sorted((l for l in tracked if l["change_inr"] and l["change_inr"] < 0), key=lambda l: l["change_inr"])
     return render_template(
         "dashboard.html",
         hunts=all_hunts,
         active=sum(1 for h in all_hunts if h["status"] == "active"),
-        tracked=sum(h["tracked_count"] for h in all_hunts),
-        interval=get_setting("check_interval_hours"),
+        tracked=len(tracked),
+        at_low=[l for l in tracked if l["at_low"]],
+        drops=drops[:5],
+        feed=alerts.recent(get_db(), 10),
+        schedule=_schedule(),
     )
 
 
@@ -77,7 +103,7 @@ def hunt_search(hunt_id):
         "pincode": get_setting("delivery_pincode"),
     })
     if not started:
-        flash("None of this hunt's stores can be searched yet. Edit the hunt and pick Amazon or Flipkart.", "error")
+        flash("None of this hunt's stores sell its brands. Edit the hunt and tick another store.", "error")
     return redirect(url_for("main.hunt_detail", hunt_id=hunt_id))
 
 
@@ -169,25 +195,116 @@ def hunt_restore(hunt_id):
 
 @bp.route("/tracked")
 def tracked():
-    return render_template("tracked.html")
+    groups = listings.tracked()
+    return render_template(
+        "tracked.html", groups=groups, count=sum(len(group["listings"]) for group in groups),
+        schedule=_schedule(), run=checker.RUN, pincode=get_setting("delivery_pincode"),
+    )
+
+
+@bp.route("/tracked/check", methods=["POST"])
+def tracked_check():
+    if not checker.due_listings(get_db()):
+        flash("There is nothing to check: no tracked listings on an active hunt.", "error")
+    elif not checker.start(scheduler.check_options(current_app.config)):
+        flash("A price check is already running.")
+    return redirect(url_for("main.tracked"))
+
+
+@bp.route("/tracked/check/progress")
+def tracked_check_progress():
+    if not checker.RUN["running"]:
+        # Reload the whole page so the new prices appear.
+        return "", 200, {"HX-Refresh": "true"}
+    return render_template("_check_progress.html", run=checker.RUN)
+
+
+@bp.route("/tracked/<int:listing_id>/untrack", methods=["POST"])
+def tracked_untrack(listing_id):
+    row = get_db().execute("SELECT hunt_id FROM listings WHERE id = ?", (listing_id,)).fetchone()
+    if not row or not listings.set_state(row["hunt_id"], listing_id, "new"):
+        abort(404)
+    flash("Stopped tracking; its price history is kept.")
+    return redirect(url_for("main.tracked"))
+
+
+def _settings_page(error=None, status=200, **typed):
+    rows = get_db().execute("SELECT key, value FROM settings").fetchall()
+    config = current_app.config
+    return render_template(
+        "settings.html", settings={**{row["key"]: row["value"] for row in rows}, **typed}, error=error,
+        schedule=_schedule(), intervals=scheduler.INTERVALS,
+        email_ready=bool(config["SENDER_EMAIL"] and config["GMAIL_APP_PASSWORD"]),
+        whatsapp_ready=bool(config["CALLMEBOT_API_KEY"]), cooldown=alerts.DEFAULT_COOLDOWN_HOURS,
+    ), status
 
 
 @bp.route("/settings")
 def settings():
-    rows = get_db().execute("SELECT key, value FROM settings").fetchall()
-    return render_template("settings.html", settings={row["key"]: row["value"] for row in rows}, error=None)
+    return _settings_page()
+
+
+@bp.route("/settings/checks", methods=["POST"])
+def settings_checks():
+    hours = request.form.get("check_interval_hours", type=int)
+    if hours not in scheduler.INTERVALS:
+        abort(400)
+    set_setting("check_interval_hours", str(hours))
+    flash(f"Prices will be checked every {hours} hour{'' if hours == 1 else 's'}.")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/alerts", methods=["POST"])
+def settings_alerts():
+    form = {key: " ".join(request.form.get(key, "").split()) for key in
+            ("notify_email", "notify_whatsapp", "quiet_start", "quiet_end", "alert_cooldown_hours")}
+    form["notify_whatsapp"] = re.sub(r"[\s-]", "", form["notify_whatsapp"])
+    problem = None
+    if form["notify_email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", form["notify_email"]):
+        problem = "That email address does not look right."
+    elif form["notify_whatsapp"] and not re.fullmatch(r"\+\d{10,15}", form["notify_whatsapp"]):
+        problem = "Give the WhatsApp number with its country code, like +919876543210."
+    elif bool(form["quiet_start"]) != bool(form["quiet_end"]):
+        problem = "Quiet hours need both a start and an end time, or neither."
+    elif any(value and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) for value in (form["quiet_start"], form["quiet_end"])):
+        problem = "Quiet hours are times like 22:00."
+    elif form["alert_cooldown_hours"] and not re.fullmatch(r"[1-9]\d{0,2}", form["alert_cooldown_hours"]):
+        problem = "The repeat gap is a whole number of hours, 1 to 999."
+    if problem:
+        return _settings_page(alert_error=problem, status=422, **form)
+    for key, value in form.items():
+        set_setting(key, value)
+    flash("Alert settings saved.")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/test/<any(email, whatsapp):channel>", methods=["POST"])
+def settings_test(channel):
+    mail = scheduler.check_options(current_app.config)["mail"]
+    body = "This is a test alert from Laptop Tracker. If you can read it, this channel works."
+    try:
+        if channel == "email":
+            address = get_setting("notify_email")
+            if not address:
+                raise RuntimeError("Save an email address first.")
+            alerts.send_email(mail, address, "Laptop Tracker test alert", body)
+        else:
+            address = get_setting("notify_whatsapp")
+            if not address:
+                raise RuntimeError("Save a WhatsApp number first.")
+            alerts.send_whatsapp(mail, address, body)
+    except Exception as error:
+        flash(f"Test not sent: {str(error).splitlines()[0][:200]}", "error")
+    else:
+        flash(f"Test alert sent to {address}.")
+    return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/delivery", methods=["POST"])
 def settings_delivery():
     pincode = re.sub(r"\s", "", request.form.get("delivery_pincode", ""))
     if pincode and not re.fullmatch(r"[1-9]\d{5}", pincode):
-        rows = get_db().execute("SELECT key, value FROM settings").fetchall()
-        saved = {row["key"]: row["value"] for row in rows}
-        return render_template(
-            "settings.html", settings={**saved, "delivery_pincode": pincode},
-            error="A PIN code is 6 digits, like 560001.",
-        ), 422
+        return _settings_page(error="A PIN code is 6 digits, like 560001.", status=422, delivery_pincode=pincode)
     set_setting("delivery_pincode", pincode)
     flash(f"Delivery will be checked for PIN code {pincode} from the next search." if pincode
           else "Delivery PIN code cleared. Delivery will not be checked.")

@@ -180,16 +180,58 @@
     <fieldset class="sm:col-span-2">
         <legend class="label">Stores to search</legend>
         <div class="flex flex-wrap gap-x-6 gap-y-2">
-            {% for key, label, available in catalog.RETAILERS %}
-            <label class="flex items-center gap-2 text-sm {{ '' if available else 'muted' }}">
+            {% for key, label in catalog.MULTI_BRAND_STORES %}
+            <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="retailers" value="{{ key }}" class="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                       {{ 'checked' if key in hunt.retailers }} {{ '' if available else 'disabled' }}>
-                {{ label }}{% if not available %} <span class="text-xs">(coming later)</span>{% endif %}
+                       {{ 'checked' if key in hunt.retailers }}>
+                {{ label }}
             </label>
             {% endfor %}
         </div>
+        <p class="label mt-4">Brands' own stores</p>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+            {% for key, label, brand, site in catalog.BRAND_STORES %}
+            <label class="flex items-center gap-2 text-sm" title="{{ site }}">
+                <input type="checkbox" name="retailers" value="{{ key }}" class="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+                       {{ 'checked' if key in hunt.retailers }}>
+                {{ label }}
+            </label>
+            {% endfor %}
+        </div>
+        <p class="muted mt-2 text-xs">A brand's own store is searched only when the hunt includes that brand, or has no brand filter.</p>
         {{ error('retailers') }}
     </fieldset>
+    {% endcall %}
+
+    {% call panel('Alerts') %}
+    <p class="muted text-sm sm:col-span-2">When a price check on a listing you track from this hunt finds one of these, you are told: in the app, and by email and WhatsApp if they are set up in Settings.</p>
+    <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="alert_new_low" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600" {{ 'checked' if hunt.alert_new_low }}>
+        A new all-time low
+    </label>
+    <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="alert_back_in_stock" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600" {{ 'checked' if hunt.alert_back_in_stock }}>
+        Back in stock
+    </label>
+    <div>
+        <label class="label" for="f-alert_target_inr">Price at or under</label>
+        <div class="flex">
+            <span class="unit rounded-l-lg rounded-r-none border-l border-r-0">₹</span>
+            <input class="field rounded-l-none tabular-nums" id="f-alert_target_inr" name="alert_target_inr"
+                   value="{{ (hunt.alert_target_inr|inr)[1:] if hunt.alert_target_inr else '' }}"
+                   placeholder="No target, e.g. 2,25,000" inputmode="numeric" autocomplete="off">
+        </div>
+        {{ error('alert_target_inr') }}
+    </div>
+    <div>
+        <label class="label" for="f-alert_drop_pct">Price falls since the last check by at least</label>
+        <div class="flex">
+            <input class="field rounded-r-none tabular-nums" id="f-alert_drop_pct" name="alert_drop_pct"
+                   value="{{ hunt.alert_drop_pct or '' }}" placeholder="Off, e.g. 5" inputmode="numeric" autocomplete="off">
+            <span class="unit">%</span>
+        </div>
+        {{ error('alert_drop_pct') }}
+    </div>
     {% endcall %}
 
     <div class="flex flex-wrap gap-2 pt-2">

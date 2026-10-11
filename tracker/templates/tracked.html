@@ -2,17 +2,127 @@
 {% block title %}Tracked{% endblock %}
 
 {% block content %}
-<header class="mb-6">
-    <h1 class="text-2xl font-semibold">Tracked</h1>
-    <p class="muted mt-1 text-sm">Every laptop you are tracking, grouped by model, with its current price and lows.</p>
+<header class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+        <h1 class="text-2xl font-semibold">Tracked</h1>
+        <p class="muted mt-1 text-sm">
+            {% if count %}
+            {{ count }} listing{{ '' if count == 1 else 's' }}. Last checked {{ schedule.last_at|when }}{% if schedule.result.failed %} ({{ schedule.result.failed }} could not be read){% endif %}.
+            {% if schedule.enabled %}Next check {{ schedule.next_at|when }}, then every {{ schedule.interval }} hour{{ '' if schedule.interval == 1 else 's' }}.{% else %}Automatic checks are switched off.{% endif %}
+            {% else %}
+            Every laptop you are tracking, with its current price and lows.
+            {% endif %}
+        </p>
+    </div>
+    {% if count and not schedule.running %}
+    <form method="post" action="{{ url_for('main.tracked_check') }}">
+        <button class="btn btn-primary">Check prices now</button>
+    </form>
+    {% endif %}
 </header>
 
+{% if schedule.running %}{% include "_check_progress.html" %}{% endif %}
+{% if schedule.result.stores_failed and not schedule.running %}
+<p class="card mb-6 border-red-300 px-5 py-3 text-sm dark:border-red-900">
+    <span class="font-medium text-red-600 dark:text-red-400">Store check failed</span>
+    in the last check for {{ schedule.result.stores_failed|join(', ') }}. Their prices below are from an earlier check.
+</p>
+{% endif %}
+
+{% if not groups %}
 <div class="card border-dashed px-6 py-16 text-center">
     <h2 class="text-base font-semibold">Nothing tracked yet</h2>
-    <p class="muted mx-auto mt-1 max-w-md text-sm">
-        For now, tracked listings are shown on each hunt's Tracked tab.
-        This page, with models grouped across stores and their price lows, is the next build phase.
-    </p>
+    <p class="muted mx-auto mt-1 max-w-md text-sm">Open a hunt, search the stores, tick the listings you want and press Track selected. They will show here with their prices.</p>
     <a class="btn btn-secondary mt-5" href="{{ url_for('main.hunt_list') }}">Go to hunts</a>
 </div>
+{% endif %}
+
+<div class="space-y-4">
+    {% for group in groups %}
+    <section class="card overflow-hidden">
+        {% if group.listings|length > 1 %}
+        <header class="border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+            <h2 class="text-sm font-semibold">Same model at {{ group.listings|length }} stores <span class="muted font-normal">· {{ group.model_number }}</span></h2>
+        </header>
+        {% endif %}
+        <ul class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for l in group.listings %}
+            {% set store = catalog.RETAILER_LABELS.get(l.retailer, l.retailer) %}
+            <li class="flex flex-wrap items-center gap-x-5 gap-y-3 px-5 py-4">
+                <div class="flex h-20 w-24 shrink-0 items-center justify-center rounded-lg bg-white p-1.5">
+                    {% if l.image_url %}<img class="max-h-full max-w-full object-contain" src="{{ l.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+                    {% else %}<span class="text-xs text-slate-400">No photo</span>{% endif %}
+                </div>
+                <div class="min-w-0 flex-1 basis-72">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="badge bg-slate-900 text-white dark:bg-slate-700">{{ store }}</span>
+                        {% if group.listings|length > 1 and loop.first and l.in_stock %}<span class="badge chip-match">Cheapest</span>{% endif %}
+                        {% if l.at_low %}<span class="badge chip-match">At its lowest</span>{% endif %}
+                        {% if not l.in_stock %}<span class="badge chip-miss">Out of stock</span>{% endif %}
+                        {% if l.deliverable == 0 %}<span class="badge chip-miss">Does not deliver to {{ l.delivery_pincode }}</span>{% endif %}
+                        {% if l.hunt_status == 'paused' %}<span class="badge badge-paused">Hunt paused: not checked</span>{% endif %}
+                    </div>
+                    <h3 class="mt-1.5 line-clamp-2 text-sm font-medium" title="{{ l.title }}">{{ l.title }}</h3>
+                    <p class="muted mt-1 text-xs">
+                        <a class="hover:underline" href="{{ url_for('main.hunt_detail', hunt_id=l.hunt_id, tab='tracked') }}">{{ l.hunt_name }}</a>
+                        · checked {{ l.checked_at|when }} · {{ l.checks }} check{{ '' if l.checks == 1 else 's' }}
+                        {% if l.deliverable == 1 and l.delivery_note %} · {{ l.delivery_note }}{% endif %}
+                    </p>
+                </div>
+                <div class="w-40">
+                    {% if l.price_inr %}
+                    <p class="text-xl font-semibold tabular-nums">{{ l.price_inr|inr }}</p>
+                    {% if l.change_inr %}
+                    <p class="text-xs font-medium tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if l.change_inr < 0 else 'text-red-600 dark:text-red-400' }}">
+                        {{ '▼' if l.change_inr < 0 else '▲' }} {{ l.change_inr|abs|inr }} since last check
+                    </p>
+                    {% elif l.checks > 1 %}
+                    <p class="muted text-xs">No change</p>
+                    {% endif %}
+                    {% if l.discount %}<p class="muted text-xs tabular-nums"><span class="line-through">{{ l.mrp_inr|inr }}</span> · {{ l.discount }}% off</p>{% endif %}
+                    {% else %}
+                    <p class="muted text-sm font-medium">Price not shown</p>
+                    {% endif %}
+                </div>
+                <dl class="w-44 space-y-0.5 text-xs">
+                    <div class="flex justify-between gap-3">
+                        <dt class="muted">All-time low</dt>
+                        <dd class="tabular-nums" {% if l.low_at %}title="Seen {{ l.low_at|when }}"{% endif %}>{{ l.low_inr|inr if l.low_inr else '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between gap-3">
+                        <dt class="muted">30-day low</dt>
+                        <dd class="tabular-nums" {% if l.low_30_at %}title="Seen {{ l.low_30_at|when }}"{% endif %}>{{ l.low_30_inr|inr if l.low_30_inr else '—' }}</dd>
+                    </div>
+                    {% if l.above_low_inr %}
+                    <div class="flex justify-between gap-3">
+                        <dt class="muted">Above the low</dt>
+                        <dd class="tabular-nums">{{ l.above_low_inr|inr }}</dd>
+                    </div>
+                    {% endif %}
+                </dl>
+                <div class="w-[120px]">
+                    {% if l.spark %}
+                    <svg viewBox="0 0 120 28" class="h-7 w-[120px]" role="img" aria-label="Price over time">
+                        <polyline points="{{ l.spark }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
+                                  class="{{ 'text-emerald-500' if (l.change_inr or 0) <= 0 else 'text-red-500' }}"></polyline>
+                    </svg>
+                    {% else %}
+                    <p class="muted text-xs">Chart after the next check</p>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                    <a class="btn btn-secondary" href="{{ l.url }}" target="_blank" rel="noopener noreferrer">View on {{ store }} ↗</a>
+                    <form method="post" action="{{ url_for('main.tracked_untrack', listing_id=l.id) }}">
+                        <button class="btn btn-danger">Untrack</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endfor %}
+</div>
+{% if count %}
+<p class="muted mt-4 text-xs">Lows are worked out from this tracker's own checks, so they start from the day a listing was first found. Out-of-stock checks never count as a low.</p>
+{% endif %}
 {% endblock %}

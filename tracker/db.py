@@ -1,4 +1,5 @@
 """SQLite connection handling and first-run setup."""
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,10 @@ ADDED_COLUMNS = [
     ("listings", "deliverable", "INTEGER"),
     ("listings", "delivery_note", "TEXT"),
     ("listings", "delivery_pincode", "TEXT"),
+    ("hunts", "alert_new_low", "INTEGER NOT NULL DEFAULT 1"),
+    ("hunts", "alert_back_in_stock", "INTEGER NOT NULL DEFAULT 1"),
+    ("hunts", "alert_target_inr", "INTEGER"),
+    ("hunts", "alert_drop_pct", "INTEGER"),
 ]
 
 
@@ -59,7 +64,7 @@ def set_setting(key, value):
 
 def init_db(app):
     """Create tables, seed default settings and import the old saved searches once."""
-    from . import migrate
+    from . import catalog, migrate
 
     conn = connect(app.config["DATABASE_PATH"])
     try:
@@ -76,6 +81,14 @@ def init_db(app):
             for line in migrate.import_legacy(conn, app.config["LEGACY_DATABASE_PATH"]):
                 app.logger.warning(line)
             conn.execute("INSERT INTO settings (key, value) VALUES ('legacy_imported', ?)", (now(),))
+            conn.commit()
+        # Hunts saved while only Amazon and Flipkart could be searched get the stores added since, once.
+        if not conn.execute("SELECT 1 FROM settings WHERE key = 'stores_added_oct_2026'").fetchone():
+            for row in conn.execute("SELECT id, retailers FROM hunts").fetchall():
+                chosen = json.loads(row["retailers"] or "[]")
+                chosen += [key for key in catalog.DEFAULT_RETAILERS if key not in chosen]
+                conn.execute("UPDATE hunts SET retailers = ? WHERE id = ?", (json.dumps(chosen), row["id"]))
+            conn.execute("INSERT INTO settings (key, value) VALUES ('stores_added_oct_2026', ?)", (now(),))
             conn.commit()
     finally:
         conn.close()

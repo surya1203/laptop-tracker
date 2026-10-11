@@ -28,7 +28,12 @@ CREATE TABLE IF NOT EXISTS hunts (
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL,
     deleted_at        TEXT,  -- set while a delete can still be undone
-    last_searched_at  TEXT
+    last_searched_at  TEXT,
+    -- Alert rules: which price changes on this hunt's tracked listings to tell you about.
+    alert_new_low       INTEGER NOT NULL DEFAULT 1,
+    alert_back_in_stock INTEGER NOT NULL DEFAULT 1,
+    alert_target_inr    INTEGER,  -- alert at or under this price
+    alert_drop_pct      INTEGER   -- alert on a fall of at least this % since the last check
 );
 
 -- One product page found at one retailer.
@@ -76,7 +81,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_listing ON alerts (listing_id, sent_at);
 
--- Key/value: notification channels, check frequency, quiet hours, delivery PIN code.
+-- Key/value: notification channels, check frequency, last check, quiet hours, delivery PIN code.
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT

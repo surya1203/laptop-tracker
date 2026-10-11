@@ -1,8 +1,9 @@
 """Listings: product pages found for a hunt. Storage and the grouping the results page shows."""
 import json
 
-from . import matching
+from . import history, matching
 from .db import get_db, now
+from .specs import squash
 
 STATES = ("new", "tracked", "ignored")
 
@@ -37,6 +38,66 @@ def save(conn, hunt_id, retailer, product, specs, pincode):
     )
     conn.commit()
     return not known
+
+
+def record(conn, listing_id, product, specs, pincode):
+    """Refresh a tracked listing from a scheduled re-check and add its price point."""
+    stamp = now()
+    deliverable = None if product.deliverable is None else int(product.deliverable)
+    conn.execute(
+        "UPDATE listings SET title = ?, image_url = COALESCE(?, image_url), model_number = COALESCE(?, model_number), "
+        "specs = ?, raw_specs = ?, last_seen_at = ?, deliverable = ?, delivery_note = ?, delivery_pincode = ? WHERE id = ?",
+        (product.title, product.image_url, specs.get("model_number"), json.dumps(specs, ensure_ascii=False),
+         json.dumps(product.raw_specs, ensure_ascii=False), stamp, deliverable, product.delivery_note,
+         pincode if deliverable is not None else None, listing_id),
+    )
+    conn.execute(
+        "INSERT INTO price_points (listing_id, price_inr, mrp_inr, in_stock, checked_at) VALUES (?, ?, ?, ?, ?)",
+        (listing_id, product.price_inr, product.mrp_inr, int(product.in_stock), stamp),
+    )
+    conn.commit()
+
+
+def points(conn, listing_id):
+    """A listing's price checks, oldest first."""
+    return conn.execute(
+        "SELECT price_inr, mrp_inr, in_stock, checked_at FROM price_points WHERE listing_id = ? ORDER BY checked_at, id",
+        (listing_id,),
+    ).fetchall()
+
+
+def tracked():
+    """Every tracked listing with its price history, grouped so the same model at several stores sits together.
+
+    Returns [{"title", "model_number", "listings": [...cheapest first]}, ...], cheapest group first.
+    """
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT l.*, h.name AS hunt_name, h.status AS hunt_status
+        FROM listings l JOIN hunts h ON h.id = l.hunt_id
+        WHERE l.state = 'tracked' AND h.deleted_at IS NULL
+        """
+    ).fetchall()
+    groups = {}
+    for row in rows:
+        listing = dict(row)
+        listing.update(history.summary(points(db, listing["id"])))
+        if listing["price_inr"] and listing["mrp_inr"] and listing["mrp_inr"] > listing["price_inr"]:
+            listing["discount"] = round(100 * (1 - listing["price_inr"] / listing["mrp_inr"]))
+        # A model number shared across stores means the same laptop; without one a listing stands alone.
+        model = squash(listing["model_number"])
+        groups.setdefault(model if len(model) >= 6 else f"listing-{listing['id']}", []).append(listing)
+
+    def price(listing):
+        return (not listing["in_stock"], listing["price_inr"] is None, listing["price_inr"] or 0, listing["id"])
+
+    result = []
+    for members in groups.values():
+        members.sort(key=price)
+        result.append({"title": members[0]["title"], "model_number": members[0]["model_number"], "listings": members})
+    result.sort(key=lambda group: price(group["listings"][0]))
+    return result
 
 
 def ignored_urls(conn, hunt_id, retailer):

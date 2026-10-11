@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
     <h1 class="text-2xl font-semibold">Settings</h1>
-    <p class="muted mt-1 text-sm">Where to deliver, and the values the later build phases will use.</p>
+    <p class="muted mt-1 text-sm">Where to deliver, how often prices are checked, and where alerts go.</p>
 </header>
 
 <div class="max-w-2xl space-y-4">
@@ -20,36 +20,99 @@
             <button class="btn btn-primary">Save</button>
         </form>
         {% if error %}<p class="field-error" role="alert">{{ error }}</p>{% endif %}
-        <p class="muted mt-3 text-xs">Changing it affects the next search; listings already found keep the result for the PIN code they were checked against.</p>
+        <p class="muted mt-3 text-xs">Changing it affects the next search or price check; listings keep the result for the PIN code they were last checked against.</p>
     </section>
 
     <section class="card p-5">
         <h2 class="text-sm font-semibold">Price checks</h2>
-        <dl class="mt-3 space-y-2 text-sm">
+        <p class="muted mt-1 text-sm">Every tracked listing on an active hunt is re-checked on this schedule while the app is running.</p>
+        <form method="post" action="{{ url_for('main.settings_checks') }}" class="mt-3 flex flex-wrap items-end gap-2">
+            <div>
+                <label class="label" for="f-check_interval_hours">Check every</label>
+                <select class="field w-40" id="f-check_interval_hours" name="check_interval_hours">
+                    {% for hours in intervals %}
+                    <option value="{{ hours }}" {{ 'selected' if hours == schedule.interval }}>{{ hours }} hour{{ '' if hours == 1 else 's' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-primary">Save</button>
+        </form>
+        <dl class="mt-4 space-y-2 text-sm">
             <div class="flex justify-between gap-4">
-                <dt class="muted">Check every</dt>
-                <dd class="font-medium tabular-nums">{{ settings.get('check_interval_hours') }} hours</dd>
+                <dt class="muted">Last check</dt>
+                <dd class="font-medium tabular-nums">
+                    {{ schedule.last_at|when }}{% if schedule.last_at and schedule.result %}: {{ schedule.result.checked }} read{% if schedule.result.failed %}, {{ schedule.result.failed }} not read{% endif %}{% if schedule.result.alerts %}, {{ schedule.result.alerts }} alert{{ '' if schedule.result.alerts == 1 else 's' }}{% endif %}{% endif %}
+                </dd>
             </div>
             <div class="flex justify-between gap-4">
-                <dt class="muted">Scheduler</dt>
-                <dd class="font-medium">Not built yet (phase 3)</dd>
+                <dt class="muted">Next check</dt>
+                <dd class="font-medium tabular-nums">
+                    {% if schedule.running %}Running now{% elif schedule.enabled %}{{ schedule.next_at|when }}{% else %}Switched off (SCHEDULER=0 in .env){% endif %}
+                </dd>
             </div>
         </dl>
+        <p class="muted mt-3 text-xs">Checking every hour means more visits to each store, which makes it likelier a store starts refusing the tracker for a while. Six hours is a safe default.</p>
     </section>
 
     <section class="card p-5">
-        <h2 class="text-sm font-semibold">Alert channels</h2>
-        <dl class="mt-3 space-y-2 text-sm">
-            <div class="flex justify-between gap-4">
-                <dt class="muted">Email</dt>
-                <dd class="font-medium">{{ settings.get('notify_email') or 'No address set' }}</dd>
+        <h2 class="text-sm font-semibold">Alerts</h2>
+        <p class="muted mt-1 text-sm">Every alert shows on the Dashboard. Add an email address or a WhatsApp number to be sent them as well. Which price changes raise an alert is chosen per hunt, in the hunt's Alerts panel.</p>
+        <form method="post" action="{{ url_for('main.settings_alerts') }}" class="mt-3 grid gap-3 sm:grid-cols-2" novalidate>
+            <div>
+                <label class="label" for="f-notify_email">Email alerts to</label>
+                <input class="field" id="f-notify_email" name="notify_email" type="email" value="{{ settings.get('notify_email') or '' }}" placeholder="you@example.com" autocomplete="email">
             </div>
-            <div class="flex justify-between gap-4">
-                <dt class="muted">WhatsApp</dt>
-                <dd class="font-medium">{{ settings.get('notify_whatsapp') or 'No number set' }}</dd>
+            <div>
+                <label class="label" for="f-notify_whatsapp">WhatsApp alerts to</label>
+                <input class="field tabular-nums" id="f-notify_whatsapp" name="notify_whatsapp" value="{{ settings.get('notify_whatsapp') or '' }}" placeholder="+919876543210" inputmode="tel" autocomplete="tel">
+            </div>
+            <div>
+                <label class="label" for="f-quiet_start">Quiet hours, from</label>
+                <input class="field w-36 tabular-nums" id="f-quiet_start" name="quiet_start" type="time" value="{{ settings.get('quiet_start') or '' }}">
+            </div>
+            <div>
+                <label class="label" for="f-quiet_end">until</label>
+                <input class="field w-36 tabular-nums" id="f-quiet_end" name="quiet_end" type="time" value="{{ settings.get('quiet_end') or '' }}">
+            </div>
+            <div>
+                <label class="label" for="f-alert_cooldown_hours">Do not repeat the same alert for a listing within</label>
+                <div class="flex">
+                    <input class="field w-24 rounded-r-none tabular-nums" id="f-alert_cooldown_hours" name="alert_cooldown_hours" value="{{ settings.get('alert_cooldown_hours') or cooldown }}" inputmode="numeric">
+                    <span class="unit">hours</span>
+                </div>
+            </div>
+            <div class="flex items-end sm:col-span-2">
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+        {% if settings.get('alert_error') %}<p class="field-error" role="alert">{{ settings.get('alert_error') }}</p>{% endif %}
+        <p class="muted mt-3 text-xs">During quiet hours an alert is shown on the Dashboard only; it is not sent later.</p>
+
+        <dl class="mt-4 space-y-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-800">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <dt>
+                    <span class="font-medium">Email</span>
+                    <span class="muted block text-xs">{{ 'Sending account is set up.' if email_ready else 'Needs SENDER_EMAIL and GMAIL_APP_PASSWORD in the .env file, then a restart.' }}</span>
+                </dt>
+                <dd>
+                    <form method="post" action="{{ url_for('main.settings_test', channel='email') }}">
+                        <button class="btn btn-secondary" {{ '' if email_ready and settings.get('notify_email') else 'disabled' }}>Send test alert</button>
+                    </form>
+                </dd>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <dt>
+                    <span class="font-medium">WhatsApp</span>
+                    <span class="muted block text-xs">{{ 'CallMeBot key is set up.' if whatsapp_ready else 'Needs CALLMEBOT_API_KEY in the .env file, then a restart.' }}</span>
+                </dt>
+                <dd>
+                    <form method="post" action="{{ url_for('main.settings_test', channel='whatsapp') }}">
+                        <button class="btn btn-secondary" {{ '' if whatsapp_ready and settings.get('notify_whatsapp') else 'disabled' }}>Send test alert</button>
+                    </form>
+                </dd>
             </div>
         </dl>
-        <p class="muted mt-3 text-xs">Sending alerts and the test buttons are built in phase 4.</p>
+        <p class="muted mt-3 text-xs">The .env.example file explains how to get a Gmail app password and a CallMeBot key.</p>
     </section>
 </div>
 {% endblock %}

@@ -1,0 +1,28 @@
+{# Price check progress per store. Polls itself while a check runs; the server answers with a page reload when it ends. #}
+<div id="check-progress" class="card mb-6 px-5 py-4"
+     hx-get="{{ url_for('main.tracked_check_progress') }}" hx-trigger="every 2s" hx-swap="outerHTML">
+    <h2 class="text-sm font-semibold">Checking prices…</h2>
+    <ul class="mt-3 space-y-3 text-sm">
+        {% for key, store in run.stores.items() %}
+        <li>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-medium">{{ store.label }}</span>
+                {% if store.phase == 'failed' %}
+                <span class="badge chip-miss">Store check failed</span>
+                {% elif store.phase == 'queued' %}
+                <span class="muted">Waiting for a browser…</span>
+                {% else %}
+                <span class="muted tabular-nums">{{ store.checked }}/{{ store.total }} checked{% if store.failed %}, {{ store.failed }} could not be read{% endif %}</span>
+                {% endif %}
+            </div>
+            {% if store.phase in ('checking', 'queued') %}
+            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div class="h-full rounded-full bg-emerald-600 transition-all" style="width: {{ [(100 * store.checked / store.total)|round|int, 3]|max if store.total else 3 }}%"></div>
+            </div>
+            {% endif %}
+            {% if store.error %}<p class="field-error">{{ store.error }}</p>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    <p class="muted mt-3 text-xs">Each product page is opened with a short pause in between. You can leave this page.</p>
+</div>

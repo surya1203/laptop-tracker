@@ -15,9 +15,10 @@ SERIES = {
 }
 
 CPU_FAMILIES = {
-    "Intel": ["Core Ultra 9", "Core Ultra 7", "Core Ultra 5", "Core i9", "Core i7", "Core i5", "Core i3"],
+    "Intel": ["Core Ultra 9", "Core Ultra 7", "Core Ultra 5", "Core 9", "Core 7", "Core 5",
+              "Core i9", "Core i7", "Core i5", "Core i3"],
     "AMD": ["Ryzen 9", "Ryzen 7", "Ryzen 5", "Ryzen AI 9", "Ryzen AI 7", "Ryzen AI 5"],
-    "Apple": ["M4 Max", "M4 Pro", "M4", "M3 Max", "M3 Pro", "M3"],
+    "Apple": ["M5 Max", "M5 Pro", "M5", "M4 Max", "M4 Pro", "M4", "M3 Max", "M3 Pro", "M3"],
     "Qualcomm": ["Snapdragon X Elite", "Snapdragon X Plus", "Snapdragon X"],
 }
 
@@ -47,16 +48,26 @@ RESOLUTION_PIXELS = {
 REFRESH_HZ = [60, 120, 144, 165, 240, 300]
 PANELS = ["IPS", "OLED", "Mini-LED"]
 
-# (key, label, searchable yet?) Croma, Vijay Sales and Reliance Digital arrive in phase 5.
-RETAILERS = [
-    ("amazon", "Amazon", True),
-    ("flipkart", "Flipkart", True),
-    ("croma", "Croma", False),
-    ("vijaysales", "Vijay Sales", False),
-    ("reliancedigital", "Reliance Digital", False),
+# Shops that sell every brand: (key, label).
+MULTI_BRAND_STORES = [
+    ("amazon", "Amazon"),
+    ("flipkart", "Flipkart"),
+    ("croma", "Croma"),
+    ("vijaysales", "Vijay Sales"),
+    ("reliancedigital", "Reliance Digital"),
 ]
-RETAILER_LABELS = {key: label for key, label, _ in RETAILERS}
-DEFAULT_RETAILERS = [key for key, _, available in RETAILERS if available]
+# The brands' own Indian online stores: (key, label, brand, site). A hunt for other brands skips them.
+# HP's store turns automated browsers away, and MSI and Gigabyte do not sell online in India themselves.
+BRAND_STORES = [
+    ("lenovo", "Lenovo Store", "Lenovo", "lenovo.com/in"),
+    ("asus", "ASUS Store", "ASUS", "asus.com/in/store"),
+    ("dell", "Dell Store", "Dell", "dellstore.com"),
+    ("acer", "Acer Store", "Acer", "store.acer.com/en-in"),
+    ("apple", "Apple Store", "Apple", "apple.com/in"),
+    ("samsung", "Samsung Store", "Samsung", "samsung.com/in"),
+]
+RETAILER_LABELS = {key: label for key, label, *_ in MULTI_BRAND_STORES + BRAND_STORES}
+DEFAULT_RETAILERS = list(RETAILER_LABELS)
 
 
 def for_browser():

@@ -16,7 +16,8 @@ FILTER_FIELDS = (
     "screen_min_in", "screen_max_in", "resolution_min", "refresh_min_hz", "panels",
     "weight_max_kg", "budget_max_inr", "retailers",
 )
-COLUMNS = ("name",) + FILTER_FIELDS
+ALERT_FIELDS = ("alert_new_low", "alert_back_in_stock", "alert_target_inr", "alert_drop_pct")
+COLUMNS = ("name",) + FILTER_FIELDS + ALERT_FIELDS
 
 # How long a deleted hunt stays restorable. The Undo toast shows for 10 seconds;
 # the extra time covers a slow click.
@@ -124,7 +125,8 @@ def filter_groups(hunt):
 
 def blank():
     hunt = {field: None for field in COLUMNS}
-    hunt.update(name="", brands=[], gpu_models=[], panels=[], retailers=list(catalog.DEFAULT_RETAILERS))
+    hunt.update(name="", brands=[], gpu_models=[], panels=[], retailers=list(catalog.DEFAULT_RETAILERS),
+                alert_new_low=1, alert_back_in_stock=1)
     return hunt
 
 
@@ -223,6 +225,13 @@ def parse_form(form):
     hunt["retailers"] = [r for r in form.getlist("retailers") if r in catalog.RETAILER_LABELS]
     if not hunt["retailers"]:
         errors["retailers"] = "Pick at least one store to search."
+
+    hunt["alert_new_low"] = int(bool(form.get("alert_new_low")))
+    hunt["alert_back_in_stock"] = int(bool(form.get("alert_back_in_stock")))
+    hunt["alert_target_inr"] = _number(form, "alert_target_inr", "Target price", errors, whole=True)
+    hunt["alert_drop_pct"] = _number(form, "alert_drop_pct", "Price drop", errors, whole=True, units={"%": 1})
+    if hunt["alert_drop_pct"] and hunt["alert_drop_pct"] >= 100:
+        errors["alert_drop_pct"] = "Price drop: pick a percentage under 100."
     return hunt, errors
 
 

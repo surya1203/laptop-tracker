@@ -1,6 +1,6 @@
 # Laptop Tracker: Rebuild Plan
 
-Oct 10, 2026 · Vinod
+Oct 10, 2026 · Surya Giri
 
 > **For Claude Code:** this is the agreed plan for rebuilding this project. Read it fully before changing code. Build in the phase order under "Build order", one phase at a time, and stop for review after each phase. Answered decisions are at the end. The old `templates/context.md` is inaccurate (it claims scraper work that doesn't exist) and should not be trusted.
 
@@ -149,3 +149,6 @@ Known risk: Amazon and Flipkart actively block bots and change their page layout
 - [ ] Where it runs: on your PC for now. Later, some kind of cloud service, maybe Amazon (AWS); which AWS service is still undecided. → **Build to run locally now, but keep it cloud-ready** (config via `.env`, no hard-coded paths, database path configurable).
 - [x] Existing code: rebuild in place in the laptop_tracker folder (**default**, old files moved to an `_old/` folder), or start a fresh folder? → **Rebuild in place, old files to `_old/`**
 - [x] Delivery check (added Oct 11, during phase 2): an optional delivery PIN code in Settings; each search records whether a listing can be delivered there. → **One PIN code for the whole app, blank = no check**
+- [x] More stores (asked for Oct 11, ahead of phase 5): Croma, Vijay Sales and Reliance Digital switched on, plus the brands' own Indian stores. → **Added Lenovo, ASUS, Dell, Acer, Apple and Samsung. HP's store blocks automated browsers; MSI and Gigabyte have no Indian online store of their own.**
+- [x] Check frequency (changed Oct 11): a choice in Settings instead of a fixed 6 hours. → **1, 3, 6, 12 or 24 hours; default 6**
+- [x] Phases 3 and 4 built together on Oct 11 at the user's request. Left out: the "new match" alert, the Chart.js history chart (a sparkline instead), per-listing delete, "Clear all tracking".
