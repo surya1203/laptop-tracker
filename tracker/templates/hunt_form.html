@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% set editing = hunt.get('id') %}
+{% block title %}{{ 'Edit hunt' if editing else 'New hunt' }}{% endblock %}
+
+{% macro error(name) %}
+{% if errors.get(name) %}<p class="field-error">{{ errors[name] }}</p>{% endif %}
+{% endmacro %}
+
+{# A collapsible group of filters. #}
+{% macro panel(title) %}
+<details open class="card group">
+    <summary class="flex cursor-pointer select-none items-center justify-between px-5 py-3.5">
+        <span class="text-sm font-semibold">{{ title }}</span>
+        <svg class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+        </svg>
+    </summary>
+    <div class="grid gap-x-4 gap-y-5 border-t border-slate-200 px-5 py-5 dark:border-slate-800 sm:grid-cols-2">
+        {{ caller() }}
+    </div>
+</details>
+{% endmacro %}
+
+{# Dropdown that also accepts a typed value. #}
+{% macro combo(name, label, value, options, placeholder='Any', chip_prefix='') %}
+<div>
+    <label class="label" for="f-{{ name }}">{{ label }}</label>
+    <input class="field combo" id="f-{{ name }}" name="{{ name }}" value="{{ value or '' }}" list="dl-{{ name }}"
+           placeholder="{{ placeholder }}" autocomplete="off" data-chip data-chip-prefix="{{ chip_prefix }}">
+    <datalist id="dl-{{ name }}">{% for option in options %}<option value="{{ option }}"></option>{% endfor %}</datalist>
+    {{ error(name) }}
+</div>
+{% endmacro %}
+
+{# A number with a unit, with suggested values. #}
+{% macro measure(name, label, value, unit, options, chip_prefix) %}
+<div>
+    <label class="label" for="f-{{ name }}">{{ label }}</label>
+    <div class="flex">
+        <input class="field combo rounded-r-none" id="f-{{ name }}" name="{{ name }}" value="{{ value|num if value else '' }}" list="dl-{{ name }}"
+               placeholder="Any" inputmode="decimal" autocomplete="off" data-chip data-chip-prefix="{{ chip_prefix }}" data-chip-suffix=" {{ unit }}">
+        <span class="unit">{{ unit }}</span>
+    </div>
+    <datalist id="dl-{{ name }}">{% for option in options %}<option value="{{ option|num }}"></option>{% endfor %}</datalist>
+    {{ error(name) }}
+</div>
+{% endmacro %}
+
+{# One toggle in a multi-select. #}
+{% macro pill(name, value, checked) %}
+<label class="cursor-pointer">
+    <input type="checkbox" class="peer sr-only" name="{{ name }}" value="{{ value }}" {{ 'checked' if checked }} data-chip>
+    <span class="inline-flex rounded-full border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:peer-checked:border-emerald-600 dark:peer-checked:text-white dark:peer-focus-visible:ring-offset-slate-900">{{ value }}</span>
+</label>
+{% endmacro %}
+
+{# The typed-value box under a multi-select, pre-filled with choices not in the list. #}
+{% macro other(name, selected, known, placeholder) %}
+<input class="field mt-3 sm:max-w-sm" name="{{ name }}_other" value="{{ selected|reject('in', known)|join(', ') }}"
+       placeholder="{{ placeholder }}" autocomplete="off" aria-label="{{ placeholder }}" data-chip>
+{% endmacro %}
+
+{% block content %}
+<header class="mb-6">
+    <a class="muted text-sm hover:underline" href="{{ url_for('main.hunt_detail', hunt_id=hunt.id) if editing else url_for('main.hunt_list') }}">← Back</a>
+    <h1 class="mt-2 text-2xl font-semibold">{{ 'Edit hunt' if editing else 'New hunt' }}</h1>
+    <p class="muted mt-1 text-sm">Fill only the filters you care about. Anything left blank means “Any”.</p>
+</header>
+
+<form id="hunt-form" method="post" class="max-w-3xl space-y-4" novalidate
+      action="{{ url_for('main.hunt_update', hunt_id=hunt.id) if editing else url_for('main.hunt_create') }}">
+
+    {% if errors %}
+    <div class="rounded-xl border border-red-300 bg-red-50 px-5 py-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert">
+        <p class="font-semibold">Not saved yet. Please fix:</p>
+        <ul class="mt-1 list-disc pl-5">{% for message in errors.values() %}<li>{{ message }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <div class="card px-5 py-5">
+        <label class="label" for="f-name">Hunt name</label>
+        <input class="field" id="f-name" name="name" value="{{ hunt.name }}" placeholder="e.g. Legion with RTX 5080" required>
+        {{ error('name') }}
+    </div>
+
+    <div class="card sticky top-2 z-10 px-5 py-3.5 shadow-sm">
+        <div class="flex flex-wrap items-center gap-1.5">
+            <span class="muted mr-1 text-xs font-medium">Active filters</span>
+            <div id="active-filters" class="contents"></div>
+            <span id="no-filters" class="muted text-sm">None yet: this hunt matches any laptop.</span>
+        </div>
+    </div>
+
+    {% call panel('Laptop') %}
+    <div class="sm:col-span-2">
+        <span class="label">Brand</span>
+        <div class="flex flex-wrap gap-2">
+            {% for brand in catalog.BRANDS %}{{ pill('brands', brand, brand in hunt.brands) }}{% endfor %}
+        </div>
+        {{ other('brands', hunt.brands, catalog.BRANDS, 'Another brand (comma separated)') }}
+    </div>
+    {{ combo('series', 'Series / model line', hunt.series, [], 'Any, e.g. Legion Pro 7') }}
+    {{ measure('weight_max_kg', 'Max weight', hunt.weight_max_kg, 'kg', [1.5, 2, 2.5, 3], '≤ ') }}
+    {% endcall %}
+
+    {% call panel('CPU') %}
+    {{ combo('cpu_brand', 'CPU brand', hunt.cpu_brand, catalog.CPU_FAMILIES, chip_prefix='CPU: ') }}
+    {{ combo('cpu_family', 'CPU family', hunt.cpu_family, []) }}
+    {{ combo('cpu_model', 'CPU model (optional)', hunt.cpu_model, [], 'Any, e.g. 275HX') }}
+    {% endcall %}
+
+    {% call panel('GPU') %}
+    {{ combo('gpu_brand', 'GPU brand', hunt.gpu_brand, catalog.GPU_MODELS, chip_prefix='GPU: ') }}
+    {{ measure('vram_min_gb', 'VRAM, at least', hunt.vram_min_gb, 'GB', catalog.VRAM_GB, 'VRAM ≥ ') }}
+    <div class="sm:col-span-2">
+        <span class="label">GPU model</span>
+        <div class="space-y-3">
+            {% for brand, models in catalog.GPU_MODELS.items() %}
+            <div class="flex flex-wrap items-center gap-2" data-gpu-group="{{ brand }}">
+                <span class="muted w-14 text-xs">{{ brand }}</span>
+                {% for model in models %}{{ pill('gpu_models', model, model in hunt.gpu_models) }}{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {{ other('gpu_models', hunt.gpu_models, catalog.GPU_MODELS.values()|sum(start=[]), 'Another GPU (comma separated)') }}
+    </div>
+    {% endcall %}
+
+    {% call panel('Memory') %}
+    {{ measure('ram_min_gb', 'RAM size, at least', hunt.ram_min_gb, 'GB', catalog.RAM_GB, 'RAM ≥ ') }}
+    {{ combo('ram_type', 'RAM type', hunt.ram_type, catalog.RAM_TYPES) }}
+    {% endcall %}
+
+    {% call panel('Storage') %}
+    {{ combo('storage_type', 'Storage type', hunt.storage_type, catalog.STORAGE_TYPES) }}
+    {{ combo('storage_interface', 'Storage interface (optional)', hunt.storage_interface, catalog.STORAGE_INTERFACES) }}
+    <div>
+        <label class="label" for="f-storage_min_gb">Storage size, at least</label>
+        <input class="field combo" id="f-storage_min_gb" name="storage_min_gb" value="{{ hunt.storage_min_gb|size if hunt.storage_min_gb else '' }}"
+               list="dl-storage_min_gb" placeholder="Any, e.g. 1 TB" autocomplete="off" data-chip data-chip-prefix="Storage ≥ ">
+        <datalist id="dl-storage_min_gb">{% for gb in catalog.STORAGE_GB %}<option value="{{ gb|size }}"></option>{% endfor %}</datalist>
+        {{ error('storage_min_gb') }}
+    </div>
+    {% endcall %}
+
+    {% call panel('Display') %}
+    {{ measure('screen_min_in', 'Screen size, from', hunt.screen_min_in, 'in', catalog.SCREEN_INCHES, 'Screen ≥ ') }}
+    {{ measure('screen_max_in', 'Screen size, up to', hunt.screen_max_in, 'in', catalog.SCREEN_INCHES, 'Screen ≤ ') }}
+    <div>
+        <label class="label" for="f-resolution_min">Resolution, at least</label>
+        <select class="field" id="f-resolution_min" name="resolution_min" data-chip data-chip-prefix="≥ ">
+            <option value="">Any</option>
+            {% for resolution in catalog.RESOLUTIONS %}
+            <option value="{{ resolution }}" data-chip-text="{{ resolution }}" {{ 'selected' if resolution == hunt.resolution_min }}>{{ resolution }} ({{ catalog.RESOLUTION_PIXELS[resolution] }})</option>
+            {% endfor %}
+        </select>
+        {{ error('resolution_min') }}
+    </div>
+    {{ measure('refresh_min_hz', 'Refresh rate, at least', hunt.refresh_min_hz, 'Hz', catalog.REFRESH_HZ, '≥ ') }}
+    <div class="sm:col-span-2">
+        <span class="label">Panel</span>
+        <div class="flex flex-wrap gap-2">
+            {% for panel_type in catalog.PANELS %}{{ pill('panels', panel_type, panel_type in hunt.panels) }}{% endfor %}
+        </div>
+        {{ other('panels', hunt.panels, catalog.PANELS, 'Another panel type (comma separated)') }}
+    </div>
+    {% endcall %}
+
+    {% call panel('Budget and stores') %}
+    <div>
+        <label class="label" for="f-budget_max_inr">Budget, up to</label>
+        <div class="flex">
+            <span class="unit rounded-l-lg rounded-r-none border-l border-r-0">₹</span>
+            <input class="field rounded-l-none tabular-nums" id="f-budget_max_inr" name="budget_max_inr"
+                   value="{{ (hunt.budget_max_inr|inr)[1:] if hunt.budget_max_inr else '' }}"
+                   placeholder="Any, e.g. 2,50,000" inputmode="numeric" autocomplete="off" data-chip data-chip-prefix="≤ ₹">
+        </div>
+        {{ error('budget_max_inr') }}
+    </div>
+    <fieldset class="sm:col-span-2">
+        <legend class="label">Stores to search</legend>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+            {% for key, label, available in catalog.RETAILERS %}
+            <label class="flex items-center gap-2 text-sm {{ '' if available else 'muted' }}">
+                <input type="checkbox" name="retailers" value="{{ key }}" class="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+                       {{ 'checked' if key in hunt.retailers }} {{ '' if available else 'disabled' }}>
+                {{ label }}{% if not available %} <span class="text-xs">(coming later)</span>{% endif %}
+            </label>
+            {% endfor %}
+        </div>
+        {{ error('retailers') }}
+    </fieldset>
+    {% endcall %}
+
+    <div class="flex flex-wrap gap-2 pt-2">
+        <button class="btn btn-primary">{{ 'Save changes' if editing else 'Save hunt' }}</button>
+        <a class="btn btn-secondary" href="{{ url_for('main.hunt_detail', hunt_id=hunt.id) if editing else url_for('main.hunt_list') }}">Cancel</a>
+    </div>
+</form>
+
+<script id="catalog-data" type="application/json">{{ catalog.for_browser()|tojson }}</script>
+{% endblock %}

@@ -1,0 +1,27 @@
+"""Configuration, read from the environment (.env) so nothing is hard-coded."""
+import os
+import secrets
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+
+
+def _flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+class Config:
+    # A random key is fine locally; set SECRET_KEY to keep sessions across restarts.
+    SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+    DATABASE_PATH = os.environ.get("DATABASE_PATH") or str(BASE_DIR / "tracker.db")
+    # The pre-rebuild database; its saved searches are imported once.
+    LEGACY_DATABASE_PATH = os.environ.get("LEGACY_DATABASE_PATH") or str(BASE_DIR / "_old" / "tracker.db")
+    HOST = os.environ.get("HOST", "127.0.0.1")
+    PORT = int(os.environ.get("PORT", "5000"))
+    DEBUG = _flag("FLASK_DEBUG", False)

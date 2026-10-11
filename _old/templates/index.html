@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spec-Based Laptop Price Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        details > summary { list-style: none; cursor: pointer; }
+        details > summary::-webkit-details-marker { display: none; }
+        .combobox-input {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1rem;
+            padding-right: 2.5rem;
+        }
+        .combobox-input::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; width: 1.5rem; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-6 font-sans">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Spec Input Form -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-2xl font-bold mb-1 text-slate-900">Create Spec Tracker</h2>
+            <p class="text-xs text-slate-500 mb-6">Set your exact constraints. Advanced fields are optional.</p>
+            
+            <form action="/add" method="POST" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Search Identifier Name *</label>
+                    <input type="text" name="search_name" placeholder="e.g. RTX 5080 Extreme Hunt" required class="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:outline-blue-500 bg-slate-50 focus:bg-white transition-colors">
+                </div>
+
+                <!-- Primary Specs -->
+                <div class="border-t border-slate-200 pt-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-blue-600 mb-3">Primary Specifications</h3>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Brand</label>
+                            <input type="text" list="brands" name="brand" placeholder="e.g. Lenovo, ASUS" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="brands"><option value="Lenovo"><option value="ASUS"><option value="HP"><option value="Dell"><option value="MSI"></datalist>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">CPU Brand</label>
+                            <input type="text" list="cpu_brands" name="cpu_brand" placeholder="e.g. Intel, AMD" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="cpu_brands"><option value="Intel"><option value="AMD"><option value="Apple"><option value="Qualcomm"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">CPU Model</label>
+                            <input type="text" name="cpu_model" placeholder="e.g. Core Ultra 9, Ryzen 9" class="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                        </div>
+
+                        <!-- SPLIT GPU FIELDS -->
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">GPU Brand</label>
+                            <input type="text" list="gpu_brands" name="gpu_brand" placeholder="e.g. NVIDIA, AMD" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="gpu_brands"><option value="NVIDIA"><option value="AMD"><option value="Intel"><option value="Apple"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">GPU Model</label>
+                            <input type="text" list="gpu_models" name="gpu_model" placeholder="e.g. RTX 5080, RX 7600S" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="gpu_models"><option value="RTX 5090"><option value="RTX 5080"><option value="RTX 4090"><option value="RTX 4080"><option value="RX 7900M"><option value="RX 7600S"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">GPU VRAM</label>
+                            <div class="flex">
+                                <select name="gpu_vram_mod" class="border border-r-0 border-slate-300 bg-slate-100 p-2 rounded-l-md text-sm text-slate-700 focus:outline-blue-500">
+                                    <option value=">=">>=</option><option value="<="><=</option><option value="==">==</option>
+                                </select>
+                                <input type="text" list="vrams" name="gpu_vram" placeholder="e.g. 16" class="combobox-input w-full border border-slate-300 p-2 rounded-r-md text-sm focus:outline-blue-500 bg-white">
+                            </div>
+                            <datalist id="vrams"><option value="8"><option value="12"><option value="16"><option value="24"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">RAM Capacity</label>
+                            <div class="flex">
+                                <select name="ram_mod" class="border border-r-0 border-slate-300 bg-slate-100 p-2 rounded-l-md text-sm text-slate-700 focus:outline-blue-500">
+                                    <option value=">=">>=</option><option value="<="><=</option><option value="==">==</option>
+                                </select>
+                                <input type="text" list="rams" name="ram" placeholder="e.g. 32" class="combobox-input w-full border border-slate-300 p-2 rounded-r-md text-sm focus:outline-blue-500 bg-white">
+                            </div>
+                            <datalist id="rams"><option value="16"><option value="32"><option value="64"></datalist>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">RAM Tech / Type</label>
+                            <input type="text" list="ram_techs" name="ram_type" placeholder="e.g. DDR5" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="ram_techs"><option value="DDR4"><option value="DDR5"><option value="LPDDR5"><option value="LPDDR5X"></datalist>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Storage Capacity</label>
+                            <div class="flex">
+                                <select name="storage_capacity_mod" class="border border-r-0 border-slate-300 bg-slate-100 p-2 rounded-l-md text-sm text-slate-700 focus:outline-blue-500">
+                                    <option value=">=">>=</option><option value="<="><=</option><option value="==">==</option>
+                                </select>
+                                <input type="text" list="storages" name="storage_capacity" placeholder="e.g. 1 TB" class="combobox-input w-full border border-slate-300 p-2 rounded-r-md text-sm focus:outline-blue-500 bg-white">
+                            </div>
+                            <datalist id="storages"><option value="512 GB"><option value="1 TB"><option value="2 TB"></datalist>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Storage Type & Tech</label>
+                            <input type="text" list="storage_techs" name="storage_type" placeholder="e.g. SSD NVMe PCIe 4.0" class="combobox-input w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-blue-500 bg-white">
+                            <datalist id="storage_techs"><option value="SSD NVMe"><option value="SSD PCIe 4.0"><option value="SSD PCIe 5.0"></datalist>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exhaustive Advanced Specs -->
+                <div class="border-t border-slate-200 pt-4">
+                    <details class="group border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
+                        <summary class="font-semibold text-sm p-3.5 bg-slate-100/70 hover:bg-slate-100 flex justify-between items-center select-none text-slate-700">
+                            <span>Advanced Search Parameters</span>
+                            <span class="text-xs text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+                        </summary>
+
+                        <div class="p-4 space-y-4 bg-white border-t border-slate-200">
+                            
+                            <!-- Item Details -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Item Details</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="brand_name" placeholder="Brand Name" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="model_name" placeholder="Model Name (e.g. Legion Pro 7)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="model_year" placeholder="Model Year (e.g. 2025)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="model_number" placeholder="Model Number" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+
+                            <!-- Processor Detailed -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Processor</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="processor_type" placeholder="Processor Type" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="processor_speed" placeholder="Processor Speed (e.g. 2.7 GHz)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="processor_count" placeholder="Processor Count (e.g. 24)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="cpu_model_number" placeholder="CPU Model Number" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="cpu_model_generation" placeholder="Generation (e.g. 13th Gen)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="cpu_model_speed_max" placeholder="Max Speed (e.g. 5.4 GHz)" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+
+                            <!-- Memory Detailed -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Memory</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="ram_memory_installed" placeholder="RAM Installed (e.g. 32 GB)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="ram_memory_technology" placeholder="RAM Tech (e.g. DDR5)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="memory_clock_speed" placeholder="Clock Speed (e.g. 6400 MHz)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="ram_memory_max_size" placeholder="Max RAM Size" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="system_ram_type" placeholder="System RAM Type" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="cache_memory_installed" placeholder="Cache Size (e.g. 36 MB)" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+
+                            <!-- Display Detailed -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Display</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="screen_size" placeholder="Screen Size (e.g. 16 Inches)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="scanner_resolution" placeholder="Scanner Res (e.g. 1080p)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="native_resolution" placeholder="Native Res (e.g. 2560x1600)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="display_type" placeholder="Display Type (e.g. OLED)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="max_display_brightness" placeholder="Max Brightness (e.g. 500 Nit)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="max_display_resolution" placeholder="Max Display Res" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+
+                            <!-- Connectivity & Ports -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Connectivity & Ports</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="network_connectivity" placeholder="Network Tech" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="wireless_technology" placeholder="Wireless Tech" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="cellular_technology" placeholder="Cellular Tech" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="bluetooth_version" placeholder="Bluetooth Version" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="wifi_generation" placeholder="Wi-Fi Generation" class="text-xs border p-2 rounded bg-white">
+                                    <input type="number" name="total_usb_ports" placeholder="Total USB Ports" class="text-xs border p-2 rounded bg-white">
+                                    <input type="number" name="number_of_ethernet_ports" placeholder="Ethernet Ports" class="text-xs border p-2 rounded bg-white">
+                                    <input type="number" name="total_thunderbolt_ports" placeholder="Thunderbolt Ports" class="text-xs border p-2 rounded bg-white">
+                                    <input type="number" name="total_hdmi_port" placeholder="HDMI Ports" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+                            
+                            <!-- Additional Details -->
+                            <details class="group/inner border border-slate-100 rounded-md p-3 bg-slate-50">
+                                <summary class="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex justify-between cursor-pointer select-none"><span>Additional Details</span><span class="text-[10px] text-slate-400">▼</span></summary>
+                                <div class="grid grid-cols-2 gap-2 pt-2">
+                                    <input type="text" name="colour" placeholder="Colour (e.g. Eclipse Black)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="operating_system" placeholder="Operating System" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="special_features" placeholder="Special Features (e.g. Backlit)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="graphics_description" placeholder="Graphics Desc (e.g. Dedicated)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="graphics_coprocessor" placeholder="Graphics Coprocessor" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="hard_disk_description" placeholder="Hard Disk Desc (e.g. SSD)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="item_weight" placeholder="Item Weight (e.g. 2570 Grams)" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="specific_uses" placeholder="Specific Uses" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="webcam_capability" placeholder="Webcam Capability" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="graphics_ram_size" placeholder="Graphics RAM Size" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="form_factor" placeholder="Form Factor" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="hard_drive_interface" placeholder="Hard Drive Interface" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="warranty_type" placeholder="Warranty Type" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="item_dimensions" placeholder="Item Dimensions" class="text-xs border p-2 rounded bg-white">
+                                    <input type="text" name="video_output" placeholder="Video Output" class="text-xs border p-2 rounded bg-white">
+                                </div>
+                            </details>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Notifications -->
+                <div class="border-t border-slate-200 pt-4 space-y-3">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-slate-700">Notification Alerts (Optional)</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input type="email" name="notification_email" placeholder="name@example.com" class="w-full border border-slate-300 p-2 rounded-md text-sm">
+                        <input type="tel" name="notification_whatsapp" placeholder="+919876543210" class="w-full border border-slate-300 p-2 rounded-md text-sm">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm transition-colors shadow-sm">
+                    Start Hunting Deals
+                </button>
+            </form>
+        </div>
+
+        <!-- Active Trackers Panel -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col h-fit max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold mb-1 text-slate-900">Active Hunts</h2>
+            <p class="text-xs text-slate-500 mb-6">Configured trackers scanned daily across Indian e-commerce sites.</p>
+
+            <div class="space-y-4">
+                {% for tracker in trackers %}
+                <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 hover:bg-white transition-colors">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-base text-slate-900">{{ tracker.name }}</h3>
+                        <span class="text-[11px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">ID #{{ tracker.id }}</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600 border-t border-slate-200 pt-2.5">
+                        {% for key, value in tracker.specs.items() %}
+                            <div class="truncate" title="{{ value }}">
+                                <span class="font-semibold text-slate-700 capitalize">{{ key.replace('_', ' ') }}:</span> 
+                                <span class="text-slate-900">{{ value }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-12 border-2 border-dashed border-slate-200 rounded-lg">
+                    <p class="text-sm font-medium text-slate-500">No active laptop hunts yet.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

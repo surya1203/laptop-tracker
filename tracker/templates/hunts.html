@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Hunts{% endblock %}
+
+{% block content %}
+<header class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div>
+        <h1 class="text-2xl font-semibold">Hunts</h1>
+        <p class="muted mt-1 text-sm">Each hunt is a saved description of the laptop you want.</p>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('main.hunt_new') }}">New hunt</a>
+</header>
+
+{% if hunts %}
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    {% for h in hunts %}{% include "_hunt_card.html" %}{% endfor %}
+</div>
+{% else %}
+<div class="card border-dashed px-6 py-16 text-center">
+    <h2 class="text-base font-semibold">No hunts yet</h2>
+    <p class="muted mx-auto mt-1 max-w-sm text-sm">Describe the laptop you are after: brand, GPU, RAM, budget. Fill only what matters to you.</p>
+    <a class="btn btn-primary mt-5" href="{{ url_for('main.hunt_new') }}">Create your first hunt</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block toasts %}
+{% if undo %}
+<div data-toast data-toast-seconds="{{ undo_seconds }}" class="card overflow-hidden text-sm shadow-lg">
+    <form method="post" action="{{ url_for('main.hunt_restore', hunt_id=undo.id) }}" class="flex items-center gap-4 px-4 py-3">
+        <span>Deleted “{{ undo.name }}”.</span>
+        <button class="font-semibold text-emerald-600 hover:underline dark:text-emerald-400">Undo</button>
+    </form>
+    <div data-toast-bar class="h-0.5 w-full origin-left bg-emerald-500"></div>
+</div>
+{% endif %}
+{% endblock %}

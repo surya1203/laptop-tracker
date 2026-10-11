@@ -1,0 +1,13 @@
+# Ignore environment variables and secrets
+.env
+
+# Ignore the virtual environment folder
+venv/
+env/
+
+# Ignore the local database
+tracker.db
+
+# Ignore Python cache files
+__pycache__/
+*.pyc

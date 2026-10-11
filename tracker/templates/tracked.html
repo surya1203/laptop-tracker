@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Tracked{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+    <h1 class="text-2xl font-semibold">Tracked</h1>
+    <p class="muted mt-1 text-sm">Every laptop you are tracking, grouped by model, with its current price and lows.</p>
+</header>
+
+<div class="card border-dashed px-6 py-16 text-center">
+    <h2 class="text-base font-semibold">Nothing tracked yet</h2>
+    <p class="muted mx-auto mt-1 max-w-md text-sm">
+        Laptops land here after you search a hunt and tick the listings you want.
+        Store search and price history are the next two build phases.
+    </p>
+    <a class="btn btn-secondary mt-5" href="{{ url_for('main.hunt_list') }}">Go to hunts</a>
+</div>
+{% endblock %}
