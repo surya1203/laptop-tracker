@@ -1,0 +1,33 @@
+{# Search progress per store. Polls itself while a search runs; the server answers with a page reload when it ends. #}
+<div id="search-progress" class="card mt-4 px-5 py-4"
+     {% if searching %}hx-get="{{ url_for('main.hunt_search_progress', hunt_id=hunt_id) }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+    <h2 class="text-sm font-semibold">{{ 'Searching stores…' if searching else 'Last search' }}</h2>
+    <ul class="mt-3 space-y-3 text-sm">
+        {% for key, store in job.stores.items() %}
+        <li>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-medium">{{ store.label }}</span>
+                {% if store.phase == 'failed' %}
+                <span class="badge chip-miss">Store check failed</span>
+                {% elif store.phase == 'done' %}
+                <span class="muted tabular-nums">{{ store.checked - store.unread }} read, {{ store.new }} new{% if store.unread %}, {{ store.unread }} could not be read{% endif %}</span>
+                {% elif store.phase == 'reading' %}
+                <span class="muted tabular-nums">{{ store.found }} found, checking specs {{ store.checked }}/{{ store.found }}</span>
+                {% elif store.phase == 'searching' %}
+                <span class="muted tabular-nums">Searching… {{ store.found }} found</span>
+                {% else %}
+                <span class="muted">Starting browser…</span>
+                {% endif %}
+            </div>
+            {% if store.phase in ('reading', 'searching', 'queued') %}
+            <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                <div class="h-full rounded-full bg-emerald-600 transition-all" style="width: {{ (100 * store.checked / store.found)|round|int if store.found and store.phase == 'reading' else 3 }}%"></div>
+            </div>
+            {% endif %}
+            {% if store.error %}<p class="field-error">{{ store.error }}</p>{% endif %}
+            {% if store.note %}<p class="muted mt-1 text-xs">{{ store.label }} {{ store.note }}.</p>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if searching %}<p class="muted mt-3 text-xs">Each product page is opened with a short pause in between, so a full search takes a few minutes. You can leave this page.</p>{% endif %}
+</div>

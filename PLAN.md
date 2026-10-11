@@ -148,3 +148,4 @@ Known risk: Amazon and Flipkart actively block bots and change their page layout
 - [x] Check frequency: every 6 hours (**default**), or another interval? → **Every 6 hours**
 - [ ] Where it runs: on your PC for now. Later, some kind of cloud service, maybe Amazon (AWS); which AWS service is still undecided. → **Build to run locally now, but keep it cloud-ready** (config via `.env`, no hard-coded paths, database path configurable).
 - [x] Existing code: rebuild in place in the laptop_tracker folder (**default**, old files moved to an `_old/` folder), or start a fresh folder? → **Rebuild in place, old files to `_old/`**
+- [x] Delivery check (added Oct 11, during phase 2): an optional delivery PIN code in Settings; each search records whether a listing can be delivered there. → **One PIN code for the whole app, blank = no check**

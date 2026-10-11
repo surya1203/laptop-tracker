@@ -9,6 +9,28 @@ document.querySelectorAll('[data-toast]').forEach((toast) => {
     setTimeout(() => toast.remove(), seconds * 1000);
 });
 
+// Results review: count ticked listings and enable "Track selected".
+const review = document.getElementById('review-form');
+if (review) {
+    const boxes = [...document.querySelectorAll('[data-track]')];
+    const count = document.getElementById('track-count');
+    const submit = document.getElementById('track-submit');
+    const all = document.getElementById('track-all');
+    const sync = () => {
+        const ticked = boxes.filter((box) => box.checked).length;
+        count.textContent = ticked;
+        submit.disabled = ticked === 0;
+        all.textContent = ticked === boxes.length ? 'Untick all' : 'Tick all';
+    };
+    boxes.forEach((box) => box.addEventListener('change', sync));
+    all.addEventListener('click', () => {
+        const tick = boxes.some((box) => !box.checked);
+        boxes.forEach((box) => { box.checked = tick; });
+        sync();
+    });
+    sync();
+}
+
 // Hunt filter form: cascading dropdowns and the live "active filters" bar.
 const form = document.getElementById('hunt-form');
 if (form) {

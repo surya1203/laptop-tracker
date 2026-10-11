@@ -29,6 +29,9 @@
             .field-error { @apply mt-1 text-xs text-red-600 dark:text-red-400; }
             .unit { @apply inline-flex items-center rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400; }
             .chip { @apply inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300; }
+            .chip-match { @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300; }
+            .chip-miss { @apply bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300; }
+            .chip-unknown { @apply border border-dashed border-slate-300 bg-transparent text-slate-500 dark:border-slate-600 dark:bg-transparent dark:text-slate-400; }
             .badge { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium; }
             .badge-active { @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300; }
             .badge-paused { @apply bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300; }
@@ -45,7 +48,7 @@
 </head>
 {% set nav = [
     ('main.dashboard', 'Dashboard', ['main.dashboard'], 'M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25'),
-    ('main.hunt_list', 'Hunts', ['main.hunt_list', 'main.hunt_new', 'main.hunt_create', 'main.hunt_detail', 'main.hunt_edit', 'main.hunt_update'], 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z'),
+    ('main.hunt_list', 'Hunts', ['main.hunt_list', 'main.hunt_new', 'main.hunt_create', 'main.hunt_detail', 'main.hunt_edit', 'main.hunt_update', 'main.hunt_search'], 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z'),
     ('main.tracked', 'Tracked', ['main.tracked'], 'M2.25 6L9 12.75l4.286-4.286a11.948 11.948 0 014.306 6.43l.776 2.898m0 0l3.182-5.511m-3.182 5.51l-5.511-3.181'),
     ('main.settings', 'Settings', ['main.settings'], 'M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75'),
 ] %}

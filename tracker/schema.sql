@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS hunts (
     retailers         TEXT NOT NULL DEFAULT '[]',
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL,
-    deleted_at        TEXT  -- set while a delete can still be undone
+    deleted_at        TEXT,  -- set while a delete can still be undone
+    last_searched_at  TEXT
 );
 
 -- One product page found at one retailer.
@@ -44,6 +45,10 @@ CREATE TABLE IF NOT EXISTS listings (
     state         TEXT NOT NULL DEFAULT 'new' CHECK (state IN ('new', 'tracked', 'ignored')),
     first_seen_at TEXT NOT NULL,
     last_seen_at  TEXT NOT NULL,
+    -- Delivery to the PIN code in Settings, as of the last check. NULL = not checked or not stated.
+    deliverable      INTEGER,
+    delivery_note    TEXT,
+    delivery_pincode TEXT,
     UNIQUE (hunt_id, url)
 );
 
@@ -71,7 +76,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_listing ON alerts (listing_id, sent_at);
 
--- Key/value: notification channels, check frequency, quiet hours.
+-- Key/value: notification channels, check frequency, quiet hours, delivery PIN code.
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT

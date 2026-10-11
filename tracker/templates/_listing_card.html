@@ -1,0 +1,57 @@
+{# One found listing. `l` is the listing, `tab` the tab it is shown on. #}
+{% set store = catalog.RETAILER_LABELS.get(l.retailer, l.retailer) %}
+<article class="card flex flex-col overflow-hidden">
+    <div class="relative flex h-44 items-center justify-center bg-white p-4">
+        {% if l.image_url %}
+        <img class="max-h-full max-w-full object-contain" src="{{ l.image_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+        {% else %}
+        <span class="text-xs text-slate-400">No photo</span>
+        {% endif %}
+        <span class="badge absolute left-3 top-3 bg-slate-900 text-white">{{ store }}</span>
+        {% if tab != 'tracked' %}
+        <label class="absolute right-3 top-3 flex cursor-pointer items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm">
+            <input type="checkbox" name="track" value="{{ l.id }}" form="review-form" class="h-4 w-4 accent-emerald-600" data-track>
+            Track
+        </label>
+        <input type="hidden" name="shown" value="{{ l.id }}" form="review-form">
+        {% endif %}
+    </div>
+    <div class="flex flex-1 flex-col gap-3 border-t border-slate-200 p-4 dark:border-slate-800">
+        <h3 class="line-clamp-2 text-sm font-medium" title="{{ l.title }}">{{ l.title }}</h3>
+        <div>
+            <div class="flex flex-wrap items-baseline gap-x-2">
+                {% if l.price_inr %}
+                <span class="text-2xl font-semibold tabular-nums">{{ l.price_inr|inr }}</span>
+                {% if l.discount %}
+                <span class="muted text-sm tabular-nums line-through">{{ l.mrp_inr|inr }}</span>
+                <span class="text-sm font-medium tabular-nums text-emerald-600 dark:text-emerald-400">{{ l.discount }}% off</span>
+                {% endif %}
+                {% else %}
+                <span class="muted text-base font-medium">Price not shown</span>
+                {% endif %}
+            </div>
+            <p class="mt-1 text-xs">
+                {% if not l.in_stock %}<span class="font-medium text-red-600 dark:text-red-400">Out of stock</span>{% if l.deliverable is not none %} · {% endif %}{% endif %}
+                {% if l.deliverable == 1 %}
+                <span class="text-emerald-700 dark:text-emerald-400">Delivers to {{ l.delivery_pincode }}</span>{% if l.delivery_note %}<span class="muted"> · {{ l.delivery_note }}</span>{% endif %}
+                {% elif l.deliverable == 0 %}
+                <span class="font-medium text-red-600 dark:text-red-400">Does not deliver to {{ l.delivery_pincode }}</span>
+                {% elif pincode and l.in_stock %}
+                <span class="muted">Delivery to {{ pincode }} not confirmed</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+            {% for text, state in l.chips %}<span class="chip {{ 'chip-' ~ state if state != 'plain' }}">{{ text }}</span>{% endfor %}
+        </div>
+        <div class="mt-auto flex flex-wrap items-center gap-2 pt-1">
+            <a class="btn btn-secondary" href="{{ l.url }}" target="_blank" rel="noopener noreferrer">View on {{ store }} ↗</a>
+            {% if tab == 'tracked' %}
+            <form method="post" action="{{ url_for('main.listing_state', hunt_id=l.hunt_id, listing_id=l.id, action='untrack') }}">
+                <input type="hidden" name="tab" value="tracked">
+                <button class="btn btn-danger">Untrack</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</article>

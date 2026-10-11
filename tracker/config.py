@@ -25,3 +25,8 @@ class Config:
     HOST = os.environ.get("HOST", "127.0.0.1")
     PORT = int(os.environ.get("PORT", "5000"))
     DEBUG = _flag("FLASK_DEBUG", False)
+    # Store search. Blank BROWSER_CHANNEL = Playwright's own Chromium, else Edge, else Chrome.
+    BROWSER_CHANNEL = os.environ.get("BROWSER_CHANNEL", "")
+    # 0 shows the browser window while it works: useful when a store starts blocking.
+    BROWSER_HEADLESS = _flag("BROWSER_HEADLESS", True)
+    SEARCH_MAX_PER_STORE = int(os.environ.get("SEARCH_MAX_PER_STORE", "24"))

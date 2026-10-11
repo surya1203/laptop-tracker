@@ -50,25 +50,87 @@
                 {% for key in hunt.retailers %}{{ catalog.RETAILER_LABELS.get(key, key) }}{{ ', ' if not loop.last }}{% endfor %}
             </p>
         </div>
-    </aside>
-
-    <section>
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
-            <div class="flex gap-6 text-sm font-medium" role="tablist">
-                <span class="border-b-2 border-emerald-600 pb-3" role="tab" aria-selected="true">Matches <span class="muted tabular-nums">0</span></span>
-                <span class="muted pb-3" role="tab" aria-selected="false">Near misses <span class="tabular-nums">0</span></span>
-                <span class="muted pb-3" role="tab" aria-selected="false">Tracked <span class="tabular-nums">{{ hunt.tracked_count }}</span></span>
-            </div>
-            <button class="btn btn-primary mb-2" disabled title="Store search is built in phase 2">Search now</button>
-        </div>
-        <div class="card mt-4 border-dashed px-6 py-16 text-center">
-            <h2 class="text-base font-semibold">Nothing searched yet</h2>
-            <p class="muted mx-auto mt-1 max-w-md text-sm">
-                Store search is the next build phase. Once it lands, listings from
-                {% for key in hunt.retailers %}{{ catalog.RETAILER_LABELS.get(key, key) }}{{ ' and ' if not loop.last }}{% endfor %}
-                will appear here for you to review before anything is tracked.
+        <div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <h3 class="muted text-xs font-medium uppercase tracking-wide">Deliver to</h3>
+            <p class="mt-1.5 text-sm font-medium">
+                {% if pincode %}PIN {{ pincode }}{% else %}<span class="muted font-normal">Not set</span>{% endif %}
+                <a class="muted ml-1 text-xs font-normal underline" href="{{ url_for('main.settings') }}">{{ 'Change' if pincode else 'Add a PIN code' }}</a>
             </p>
         </div>
+    </aside>
+
+    <section class="min-w-0">
+        {% set tabs = [('match', 'Matches'), ('near', 'Near misses'), ('tracked', 'Tracked'), ('miss', 'Others')] %}
+        {% set shown = found[tab] %}
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
+            <nav class="flex gap-6 overflow-x-auto text-sm font-medium" aria-label="Results">
+                {% for key, label in tabs %}
+                <a href="{{ url_for('main.hunt_detail', hunt_id=hunt.id, tab=key) }}"
+                   class="whitespace-nowrap border-b-2 pb-3 {{ 'border-emerald-600' if key == tab else 'muted border-transparent hover:text-slate-900 dark:hover:text-slate-100' }}"
+                   {% if key == tab %}aria-current="page"{% endif %}>{{ label }} <span class="muted tabular-nums">{{ found[key]|length }}</span></a>
+                {% endfor %}
+            </nav>
+            <form method="post" action="{{ url_for('main.hunt_search', hunt_id=hunt.id) }}" class="mb-2">
+                <button class="btn btn-primary" {{ 'disabled' if searching }}>{{ 'Searching…' if searching else 'Search now' }}</button>
+            </form>
+        </div>
+
+        {% if job and (searching or job.problems) %}
+        {% with hunt_id = hunt.id %}{% include "_search_progress.html" %}{% endwith %}
+        {% endif %}
+
+        <p class="muted mt-4 text-xs">
+            {% if tab == 'match' %}Every filter you set is met.
+            {% elif tab == 'near' %}At most one filter failed, or the store's page left something unsaid. Red chips failed; dashed chips could not be checked.
+            {% elif tab == 'tracked' %}Listings you chose to follow. Scheduled price checks arrive in the next build phase.
+            {% else %}Found by the store's search but failed two or more filters.{% endif %}
+            {% if hunt.last_searched_at %}Last searched {{ hunt.last_searched_at|shortdate }}.{% endif %}
+        </p>
+
+        {% if shown %}
+        {% if tab != 'tracked' %}
+        <form id="review-form" method="post" action="{{ url_for('main.hunt_review', hunt_id=hunt.id) }}"
+              class="card sticky top-2 z-10 mt-3 flex flex-wrap items-center justify-between gap-3 px-4 py-3 shadow-sm">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <p class="text-sm"><span id="track-count" class="font-semibold tabular-nums">0</span> of {{ shown|length }} ticked.
+                <span class="muted">Unticked listings on this tab are hidden and will not be shown again.</span></p>
+            <div class="flex gap-2">
+                <button type="button" class="btn btn-secondary" id="track-all">Tick all</button>
+                <button class="btn btn-primary" id="track-submit" disabled>Track selected</button>
+            </div>
+        </form>
+        {% endif %}
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {% for l in shown %}{% include "_listing_card.html" %}{% endfor %}
+        </div>
+        {% else %}
+        <div class="card mt-4 border-dashed px-6 py-16 text-center">
+            {% if searching %}
+            <h2 class="text-base font-semibold">Search in progress</h2>
+            <p class="muted mx-auto mt-1 max-w-md text-sm">Listings appear here when the search finishes.</p>
+            {% elif not hunt.last_searched_at %}
+            <h2 class="text-base font-semibold">Nothing searched yet</h2>
+            <p class="muted mx-auto mt-1 max-w-md text-sm">
+                Press <strong>Search now</strong> to look on
+                {% for key in hunt.retailers %}{{ catalog.RETAILER_LABELS.get(key, key) }}{{ ' and ' if not loop.last }}{% endfor %}.
+                You review what is found before anything is tracked.
+            </p>
+            {% elif tab == 'tracked' %}
+            <h2 class="text-base font-semibold">Nothing tracked yet</h2>
+            <p class="muted mx-auto mt-1 max-w-md text-sm">Tick listings under Matches or Near misses, then press Track selected.</p>
+            {% else %}
+            <h2 class="text-base font-semibold">Nothing here</h2>
+            <p class="muted mx-auto mt-1 max-w-md text-sm">The last search left nothing to review on this tab. Try another tab, loosen a filter, or search again.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if found.ignored %}
+        <form method="post" action="{{ url_for('main.hunt_restore_hidden', hunt_id=hunt.id) }}" class="muted mt-6 text-xs">
+            {{ found.ignored|length }} hidden listing{{ '' if found.ignored|length == 1 else 's' }}.
+            <button class="underline hover:text-slate-900 dark:hover:text-slate-100">Bring them back for review</button>
+        </form>
+        {% endif %}
     </section>
 </div>
 {% endblock %}

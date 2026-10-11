@@ -10,13 +10,22 @@ DEFAULT_SETTINGS = {
 }
 
 
+# Columns added after the first release: (table, column, type). Applied to databases that predate them.
+ADDED_COLUMNS = [
+    ("hunts", "last_searched_at", "TEXT"),
+    ("listings", "deliverable", "INTEGER"),
+    ("listings", "delivery_note", "TEXT"),
+    ("listings", "delivery_pincode", "TEXT"),
+]
+
+
 def now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def connect(path):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -36,7 +45,16 @@ def close_db(_exc=None):
 
 def get_setting(key, default=None):
     row = get_db().execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-    return row["value"] if row else default
+    return row["value"] if row and row["value"] else default
+
+
+def set_setting(key, value):
+    db = get_db()
+    db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    db.commit()
 
 
 def init_db(app):
@@ -46,6 +64,9 @@ def init_db(app):
     conn = connect(app.config["DATABASE_PATH"])
     try:
         conn.executescript((Path(__file__).parent / "schema.sql").read_text(encoding="utf-8"))
+        for table, column, kind in ADDED_COLUMNS:
+            if column not in {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
         conn.executemany(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", DEFAULT_SETTINGS.items()
         )
