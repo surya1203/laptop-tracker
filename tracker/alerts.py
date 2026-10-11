@@ -1,7 +1,7 @@
 """Alerts: decides when a price check is worth telling you about, and sends it.
 
 Rules are set per hunt. Every alert is written to the in-app feed; email (Gmail)
-and WhatsApp (CallMeBot) are sent as well when they are set up, outside quiet hours.
+and WhatsApp (CallMeBot) are sent as well when they are set up in Settings, outside quiet hours.
 A rule does not fire twice for the same listing within the cooldown.
 """
 import json
@@ -72,9 +72,19 @@ def in_quiet_hours(start, end, moment=None):
     return start <= clock < end if start < end else clock >= start or clock < end
 
 
+def credentials(conn, fallback=None):
+    """What the channels sign in with: the values saved in Settings, else the ones in .env (`fallback`)."""
+    fallback = fallback or {}
+    return {
+        "sender": _setting(conn, "sender_email") or fallback.get("sender") or "",
+        "password": (_setting(conn, "gmail_app_password") or fallback.get("password") or "").replace(" ", ""),
+        "callmebot_key": _setting(conn, "callmebot_api_key") or fallback.get("callmebot_key") or "",
+    }
+
+
 def send_email(mail, to, subject, body):
     if not (mail.get("sender") and mail.get("password")):
-        raise RuntimeError("SENDER_EMAIL and GMAIL_APP_PASSWORD are not set in .env.")
+        raise RuntimeError("Enter the Gmail address to send from and its app password in Settings first.")
     message = EmailMessage()
     message["From"], message["To"], message["Subject"] = mail["sender"], to, subject
     message.set_content(body)
@@ -82,6 +92,8 @@ def send_email(mail, to, subject, body):
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
             server.login(mail["sender"], mail["password"])
             server.send_message(message)
+    except smtplib.SMTPAuthenticationError as error:
+        raise RuntimeError("Gmail refused the sign-in. It needs a 16-letter app password, not your normal password.") from error
     except (smtplib.SMTPServerDisconnected, OSError):
         # Some networks block the secure port; Gmail also accepts mail on 587.
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
@@ -92,7 +104,7 @@ def send_email(mail, to, subject, body):
 
 def send_whatsapp(mail, phone, body):
     if not mail.get("callmebot_key"):
-        raise RuntimeError("CALLMEBOT_API_KEY is not set in .env.")
+        raise RuntimeError("Enter your CallMeBot key in Settings first.")
     query = urllib.parse.urlencode({"phone": phone, "text": body, "apikey": mail["callmebot_key"]})
     with urllib.request.urlopen(f"https://api.callmebot.com/whatsapp.php?{query}", timeout=30) as response:
         answer = response.read().decode("utf-8", "replace")
@@ -103,10 +115,12 @@ def send_whatsapp(mail, phone, body):
 def deliver(conn, mail, subject, body, quiet_ok=False):
     """Send to every channel that is set up. Returns (channels reached, problems)."""
     reached, problems = ["feed"], []
+    mail = credentials(conn, mail)
     if not quiet_ok and in_quiet_hours(_setting(conn, "quiet_start"), _setting(conn, "quiet_end")):
         return reached, ["quiet hours: shown here only"]
     for channel, address, send in (
-        ("email", _setting(conn, "notify_email"), lambda to: send_email(mail, to, subject, body)),
+        ("email", _setting(conn, "notify_email") or (mail["sender"] if mail["password"] else None),
+         lambda to: send_email(mail, to, subject, body)),
         ("whatsapp", _setting(conn, "notify_whatsapp"), lambda to: send_whatsapp(mail, to, body)),
     ):
         if not address:

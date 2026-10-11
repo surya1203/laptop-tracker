@@ -230,12 +230,12 @@ def tracked_untrack(listing_id):
 
 def _settings_page(error=None, status=200, **typed):
     rows = get_db().execute("SELECT key, value FROM settings").fetchall()
-    config = current_app.config
+    mail = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])
     return render_template(
         "settings.html", settings={**{row["key"]: row["value"] for row in rows}, **typed}, error=error,
-        schedule=_schedule(), intervals=scheduler.INTERVALS,
-        email_ready=bool(config["SENDER_EMAIL"] and config["GMAIL_APP_PASSWORD"]),
-        whatsapp_ready=bool(config["CALLMEBOT_API_KEY"]), cooldown=alerts.DEFAULT_COOLDOWN_HOURS,
+        schedule=_schedule(), intervals=scheduler.INTERVALS, sender=mail["sender"],
+        password_saved=bool(mail["password"]), key_saved=bool(mail["callmebot_key"]),
+        cooldown=alerts.DEFAULT_COOLDOWN_HOURS,
     ), status
 
 
@@ -257,10 +257,17 @@ def settings_checks():
 @bp.route("/settings/alerts", methods=["POST"])
 def settings_alerts():
     form = {key: " ".join(request.form.get(key, "").split()) for key in
-            ("notify_email", "notify_whatsapp", "quiet_start", "quiet_end", "alert_cooldown_hours")}
+            ("sender_email", "notify_email", "notify_whatsapp", "quiet_start", "quiet_end", "alert_cooldown_hours")}
+    # Secrets are never shown back in the form, so an empty box means "keep what is saved".
+    secrets = {key: "".join(request.form.get(key, "").split()) for key in ("gmail_app_password", "callmebot_api_key")}
     form["notify_whatsapp"] = re.sub(r"[\s-]", "", form["notify_whatsapp"])
     problem = None
-    if form["notify_email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", form["notify_email"]):
+    email = r"[^@\s]+@[^@\s]+\.[^@\s]+"
+    if form["sender_email"] and not re.fullmatch(email, form["sender_email"]):
+        problem = "The address to send from does not look right."
+    elif secrets["gmail_app_password"] and not re.fullmatch(r"[A-Za-z]{16}", secrets["gmail_app_password"]):
+        problem = "A Gmail app password is 16 letters (Google shows it in four groups of four). It is not your normal Gmail password."
+    elif form["notify_email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", form["notify_email"]):
         problem = "That email address does not look right."
     elif form["notify_whatsapp"] and not re.fullmatch(r"\+\d{10,15}", form["notify_whatsapp"]):
         problem = "Give the WhatsApp number with its country code, like +919876543210."
@@ -274,17 +281,20 @@ def settings_alerts():
         return _settings_page(alert_error=problem, status=422, **form)
     for key, value in form.items():
         set_setting(key, value)
+    for key, value in secrets.items():
+        if value:
+            set_setting(key, value)
     flash("Alert settings saved.")
     return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/test/<any(email, whatsapp):channel>", methods=["POST"])
 def settings_test(channel):
-    mail = scheduler.check_options(current_app.config)["mail"]
+    mail = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])
     body = "This is a test alert from Laptop Tracker. If you can read it, this channel works."
     try:
         if channel == "email":
-            address = get_setting("notify_email")
+            address = get_setting("notify_email") or mail["sender"]
             if not address:
                 raise RuntimeError("Save an email address first.")
             alerts.send_email(mail, address, "Laptop Tracker test alert", body)

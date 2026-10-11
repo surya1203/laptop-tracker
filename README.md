@@ -74,10 +74,12 @@ Listings you tick in a hunt appear on the **Tracked** page. The same model found
 
 Each hunt has an Alerts panel in its form with four rules: a new all-time low (on by default), back in stock (on by default), price at or under a target, and a fall of at least X% since the previous check. They apply to the listings tracked from that hunt.
 
-Every alert is listed on the Dashboard. To also get them by email or WhatsApp:
+Every alert is listed on the Dashboard. To also get them by email or WhatsApp, fill in Settings > Alerts and press the test buttons:
 
-1. Put the sending credentials in `.env` (`SENDER_EMAIL` and `GMAIL_APP_PASSWORD` for email, `CALLMEBOT_API_KEY` for WhatsApp; `.env.example` says where to get them) and restart.
-2. In Settings, enter the email address and/or WhatsApp number (with country code) to notify, and press **Send test alert**.
+- **Email** needs a Gmail address to send from and an app password for it (Gmail refuses an app signing in with the normal password; the page links to where Google issues one). Alerts go to that same address unless you give another.
+- **WhatsApp** needs your number and a key from the free CallMeBot service (the page links to its steps).
+
+These are kept in the tracker's database (`tracker.db`, which is not uploaded to GitHub), as plain text.
 
 The same rule does not fire again for the same listing within 24 hours (changeable in Settings). During quiet hours, if set, alerts show on the Dashboard only and are not sent later.
 
