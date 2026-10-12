@@ -171,7 +171,7 @@ def test_buyhatke_stretches_become_points_before_tracking_began():
 def _tracked_listing(price=200000):
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
-    conn.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, url TEXT, history_checked_at TEXT, history_note TEXT)")
+    conn.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, url TEXT, history_checked_at TEXT, history_note TEXT, history_url TEXT)")
     conn.execute("CREATE TABLE price_points (id INTEGER PRIMARY KEY, listing_id, price_inr, mrp_inr, in_stock, checked_at, source)")
     conn.execute("INSERT INTO listings (id, url) VALUES (1, 'https://www.croma.com/x/p/1')")
     conn.execute("INSERT INTO price_points (listing_id, price_inr, in_stock, checked_at) VALUES (1, ?, 1, '2026-10-11T06:00:00+00:00')", (price,))
@@ -182,7 +182,7 @@ def test_earlier_prices_are_imported_once_and_count_towards_the_low():
     conn, listing = _tracked_listing()
     earlier = [(datetime(2026, 3, 1, tzinfo=timezone.utc), 180000), (datetime(2026, 8, 1, tzinfo=timezone.utc), 210000)]
     asked = []
-    note = backfill.import_listing(conn, listing, lambda url, before: asked.append(before) or {"points": earlier, "current": 205000})
+    note = backfill.import_listing(conn, listing, lambda url, before: asked.append(before) or {"points": earlier, "current": 205000, "link": "https://buyhatke.com/x-1"})
     assert asked == [datetime(2026, 10, 11, 6, 0, tzinfo=timezone.utc)] and "back to 1 Mar 2026" in note
     from tracker import listings
     points = listings.points(conn, 1)
@@ -193,7 +193,7 @@ def test_earlier_prices_are_imported_once_and_count_towards_the_low():
     assert found["spark"]["imported"].split()[0] == "2.0,3.0" and found["spark"]["own"].endswith("118.0,25.0")
     # A price above the imported low is not a new low, so the first check after an import stays quiet.
     assert alerts.triggered(_rules(), points) == []
-    assert conn.execute("SELECT history_checked_at FROM listings").fetchone()[0]
+    assert conn.execute("SELECT history_checked_at, history_url FROM listings").fetchone()[1] == "https://buyhatke.com/x-1"
 
 
 def test_nothing_is_imported_when_buyhatke_seems_to_mean_another_configuration():

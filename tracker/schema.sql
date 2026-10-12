@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS listings (
     -- Earlier prices are looked up once per tracked listing (see backfill.py): when, and what came of it.
     history_checked_at TEXT,
     history_note       TEXT,
+    history_url        TEXT,  -- BuyHatke's page for the product, when it has one
     UNIQUE (hunt_id, url)
 );
 

@@ -96,7 +96,8 @@ def points_from(page, before):
 
 
 def fetch(url, before):
-    """What BuyHatke knows about a store link: {"points": [(utc time, price), ...], "current": its latest price}."""
+    """What BuyHatke knows about a store link:
+    {"points": [(utc time, price), ...], "current": its latest price, "link": its page for the product}."""
     global _stores
     if _stores is None:
         _stores = json.loads(_get(f"{HOME}/api/getGlobalPosAndPid"))["data"]
@@ -108,8 +109,8 @@ def fetch(url, before):
     data = record.get("data") or {}
     if not record.get("status") or not data.get("internalPid"):
         raise Unavailable("BuyHatke has not recorded this listing.")
-    page = _get(f"{HOME}/x-price-in-india-{pos}-{data['internalPid']}")
-    return {"points": points_from(page, before), "current": data.get("cur_price")}
+    link = f"{HOME}/x-price-in-india-{pos}-{data['internalPid']}"
+    return {"points": points_from(_get(link), before), "current": data.get("cur_price"), "link": link}
 
 
 def import_listing(conn, listing, fetcher=fetch):
@@ -122,11 +123,13 @@ def import_listing(conn, listing, fetcher=fetch):
         "ORDER BY checked_at DESC, id DESC LIMIT 1", (listing["id"],)
     ).fetchone()
     before = datetime.fromisoformat(own) if own else datetime.now(timezone.utc)
+    link = None
     try:
         found = fetcher(listing["url"], before)
     except Unavailable as error:
         note, points = str(error), []
     else:
+        link = found.get("link")
         points, theirs, ours = found["points"], found["current"], latest["price_inr"] if latest else None
         if not points:
             note = "BuyHatke has no prices from before this listing was tracked."
@@ -140,7 +143,8 @@ def import_listing(conn, listing, fetcher=fetch):
         "INSERT INTO price_points (listing_id, price_inr, in_stock, checked_at, source) VALUES (?, ?, 1, ?, ?)",
         [(listing["id"], price, moment.isoformat(timespec="seconds"), SOURCE) for moment, price in points],
     )
-    conn.execute("UPDATE listings SET history_checked_at = ?, history_note = ? WHERE id = ?", (now(), note, listing["id"]))
+    conn.execute("UPDATE listings SET history_checked_at = ?, history_note = ?, history_url = ? WHERE id = ?",
+                 (now(), note, link, listing["id"]))
     conn.commit()
     return note
 

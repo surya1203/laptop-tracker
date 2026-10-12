@@ -228,7 +228,7 @@ def tracked_history(listing_id):
     """A listing's prices for the full chart, as two series: the tracker's own checks and imported earlier prices."""
     db = get_db()
     row = db.execute(
-        "SELECT l.title, l.retailer, l.history_note FROM listings l JOIN hunts h ON h.id = l.hunt_id "
+        "SELECT l.title, l.retailer, l.history_note, l.history_url FROM listings l JOIN hunts h ON h.id = l.hunt_id "
         "WHERE l.id = ? AND h.deleted_at IS NULL", (listing_id,),
     ).fetchone()
     if not row:
@@ -239,7 +239,7 @@ def tracked_history(listing_id):
             moment = datetime.fromisoformat(point["checked_at"])
             series["imported" if point["source"] else "own"].append({"x": int(moment.timestamp() * 1000), "y": point["price_inr"]})
     return jsonify(title=row["title"], store=catalog.RETAILER_LABELS.get(row["retailer"], row["retailer"]),
-                   note=row["history_note"], **series)
+                   note=row["history_note"], link=row["history_url"], **series)
 
 
 @bp.route("/tracked/<int:listing_id>/untrack", methods=["POST"])

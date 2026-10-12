@@ -257,6 +257,8 @@ if (historyDialog) {
             part('title').textContent = loaded.title;
             part('store').textContent = loaded.store;
             part('note').textContent = loaded.note || '';
+            part('link').hidden = !loaded.link;
+            if (loaded.link) part('link').href = loaded.link;
             draw();
         });
     });

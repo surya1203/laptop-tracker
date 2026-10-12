@@ -25,6 +25,7 @@ ADDED_COLUMNS = [
     ("price_points", "source", "TEXT"),
     ("listings", "history_checked_at", "TEXT"),
     ("listings", "history_note", "TEXT"),
+    ("listings", "history_url", "TEXT"),
 ]
 
 
