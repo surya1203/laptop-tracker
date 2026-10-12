@@ -1,0 +1,30 @@
+# Finds out whether the stores answer one of GitHub's machines. Run it by hand from the Actions tab.
+# It searches each store once and reads one listing; nothing is saved and no alert is sent.
+name: Store trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      pincode:
+        description: PIN code to check delivery for
+        default: "560001"
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python tools/store_trial.py --pincode "$PINCODE"
+        env:
+          PINCODE: ${{ inputs.pincode }}
+          PYTHONIOENCODING: utf-8
