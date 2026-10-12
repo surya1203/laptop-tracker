@@ -165,7 +165,7 @@ def test_a_regular_update_lists_every_tracked_listing_and_its_title_leads_with_a
     items = [_item(), _item(title="Laptop B", change_inr=-5000, price_inr=185000, at_low=True),
              _item(title="Laptop C", checked_at="2026-10-12T06:00:00+00:00", change_inr=-900)]
     headline, reached, problems = alerts.status_update(conn, {}, items, since)
-    assert (headline, reached, problems) == ("3 tracked laptops: 1 price changed", ["feed", "discord"], [])
+    assert (headline, reached, problems) == ("3 tracked listings: 1 price changed", ["feed", "discord"], [])
     texts = [line["text"] for line in sent[0][1]["lines"]]
     assert texts == ["₹2,00,000 · no change · lowest ₹1,90,000", "₹1,85,000 · ▼ ₹5,000 since the last check · its lowest so far",
                      "₹2,00,000 · not read this time · lowest ₹1,90,000"]
@@ -176,7 +176,7 @@ def test_a_regular_update_lists_every_tracked_listing_and_its_title_leads_with_a
     assert alerts.status_update(conn, {}, items, since)[0] == "New all-time low: ₹1,85,000 · Laptop B"
     conn.execute("INSERT INTO alerts (listing_id, rule, price_inr, sent_at) VALUES (7, 'new_match', 150000, '2026-10-12T09:20:00+00:00')")
     assert alerts.status_update(conn, {}, items, since)[0] == "New all-time low, New match"
-    assert alerts.update_headline([], [_item()], since) == "1 tracked laptop: no price change"
+    assert alerts.update_headline([], [_item()], since) == "1 tracked listing: no price change"
     assert alerts.update_line(_item(in_stock=False, low_inr=200000), since) == "₹2,00,000 · out of stock"
 
 

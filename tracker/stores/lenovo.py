@@ -34,13 +34,21 @@ def _title(item):
                  else f"{title} ({item['productCode']})")
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     # The store only sells Lenovo, and searching for the brand name itself brings up accessories.
-    text = re.sub(r"\blenovo\b|\blaptops?\b", " ", query, flags=re.I).strip() or "laptop"
-    hits = []
-    for item in _products(page, text, 40):
-        if item.get("flCode") != "laptops" or not item.get("url") or not item.get("productCode"):
+    text = re.sub(r"\blenovo\b|\blaptops?\b|\bdesktops?\b", " ", query, flags=re.I).strip() or kind
+    found = _products(page, text, 40)
+    if kind == "tower" and text != kind:
+        # Laptops crowd a search out ("RTX 5070" alone brings back no desktops), so the towers are listed as well.
+        found += _products(page, kind, 40)
+    hits, seen = [], set()
+    for item in found:
+        if not item.get("url") or not item.get("productCode") or item["productCode"] in seen:
             continue
+        # Its desktops include all-in-ones and palm-sized PCs; the towers say so in their address.
+        if item.get("flCode") != "laptops" if kind == "laptop" else (item.get("flCode") != "desktops" or "tower" not in item["url"]):
+            continue
+        seen.add(item["productCode"])
         hits.append(Hit(url=HOME + item["url"], title=_title(item)))
         if len(hits) >= limit:
             break
@@ -48,8 +56,15 @@ def search(page, query, limit):
 
 
 def read(page, url, pincode):
-    code = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1].upper()
-    item = next((p for p in _products(page, code, 10) if str(p.get("productCode", "")).upper() == code), None)
+    line, code = urlsplit(url).path.rstrip("/").rsplit("/", 2)[-2:]
+    code = code.upper()
+    # Asking for the part number finds a build-your-own model; a ready-made one only turns up under its model's name.
+    name = " ".join(word for word in re.findall(r"[a-z0-9]+", line.lower()) if word != "lenovo")
+    item = None
+    for text in (code, name, f"{name} {code}"):
+        item = next((p for p in _products(page, text, 40) if str(p.get("productCode", "")).upper() == code), None)
+        if item:
+            break
     if not item:
         raise StoreError("Lenovo no longer lists this model.")
     specs = {"Brand": "Lenovo", "Part Number": item["productCode"]}

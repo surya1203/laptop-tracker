@@ -1,7 +1,9 @@
 """The parts of the store modules that work without a browser, and the spec sheets the newer stores publish."""
-from tracker import hunts, search, specs
+from tracker import hunts, matching, search, specs
 from tracker.stores import STORES, acer, apple, asus, sells, vijaysales
-from tracker.stores.base import ld_offer, relevant, without_brand
+from werkzeug.datastructures import MultiDict
+
+from tracker.stores.base import is_tower, ld_offer, relevant, without_brand
 
 CROMA_TABLE = {
     "Brand": "Lenovo", "Model Series": "Legion 5 15IAX10", "Model Number": "83F000BSIN", "Product Weight": "1.9 Kg",
@@ -112,3 +114,47 @@ def test_price_from_a_schema_block():
     block = {"offers": [{"price": 239900.00, "priceCurrency": "INR"}]}
     assert ld_offer(block) == (239900, True)
     assert ld_offer({"offers": {"price": "219990", "availability": "https://schema.org/OutOfStock"}}) == (219990, False)
+
+
+def test_a_tower_hunt_searches_for_desktops_at_the_stores_that_sell_them():
+    hunt = hunts.blank()
+    hunt.update(kind="tower", brands=["Lenovo"], gpu_models=["RTX 5070"])
+    assert search.queries(hunt) == ["Lenovo RTX 5070 desktop"]
+    assert sells(STORES["amazon"], [], "tower") and sells(STORES["lenovo"], ["Lenovo"], "tower")
+    assert not sells(STORES["asus"], ["ASUS"], "tower") and not sells(STORES["apple"], [], "tower")
+    assert not sells(STORES["lenovo"], ["Dell"], "tower")
+    assert sells(STORES["asus"], ["ASUS"])  # laptops are unaffected
+
+
+def test_all_in_ones_are_not_towers():
+    assert is_tower("HP OMEN 16L Gaming Desktop TG03-0005in AMD Ryzen 5 8400F")
+    assert not is_tower("HP 27-cr1026in 68.58 cm (27 inch) All-In-One Desktop")
+    assert not is_tower("ASUS AiO V470 27 Inch Desktop") and not is_tower("Acer Aspire C27 All in One (AIO) Desktop")
+    assert relevant("HP OMEN 16L Gaming Desktop (RTX 5060)", "HP OMEN desktop")
+
+
+def test_a_tower_hunt_drops_screen_and_weight_filters_and_stores_without_towers():
+    form = MultiDict([("name", "Tower"), ("kind", "tower"), ("screen_min_in", "16"), ("weight_max_kg", "abc"), ("panels", "OLED"),
+                      ("retailers", "amazon"), ("retailers", "asus"), ("retailers", "dell")])
+    hunt, errors = hunts.parse_form(form)
+    assert not errors
+    assert (hunt["kind"], hunt["screen_min_in"], hunt["weight_max_kg"], hunt["panels"], hunt["retailers"]) == ("tower", None, None, [], ["amazon", "dell"])
+    assert hunts.chips(hunt) == ["Tower PC"]
+    _, errors = hunts.parse_form(MultiDict([("name", "Tower"), ("kind", "tower"), ("retailers", "asus")]))
+    assert "tower" in errors["retailers"]
+    assert hunts.parse_form(MultiDict([("name", "Old form"), ("retailers", "asus")]))[0]["kind"] == "laptop"
+
+
+def test_desktop_processors_and_graphics_cards_are_read():
+    found = specs.normalise("HP OMEN 16L Gaming Desktop TG03-0012in Intel Core i7-14700F (32 GB RAM/NVIDIA GeForce RTX 5060 Ti 16GB "
+                            "Graphics/1 TB SSD/Windows 11 Home)", {})
+    assert (found["cpu_family"], found["cpu_model"], found["gpu_model"], found["ram_gb"], found["storage_gb"]) == ("Core i7", "14700F", "RTX 5060 Ti", 32, 1024)
+    found = specs.normalise("CyberPowerPC Gaming Desktop PC, AMD Ryzen 7 9800X3D, Radeon RX 9070 XT 16GB, 32GB DDR5 RAM, 2TB NVMe SSD", {})
+    assert (found["cpu_family"], found["cpu_model"], found["gpu_brand"], found["gpu_model"], found["ram_type"]) == ("Ryzen 7", "9800X3D", "AMD", "RX 9070 XT", "DDR5")
+    assert specs.normalise("Lenovo Legion T5 - Intel Core Ultra 7 265KF, 16GB RAM, 1TB SSD, RTX 5070 12GB", {})["cpu_model"] == "265KF"
+    hunt = hunts.blank()
+    hunt.update(kind="tower", gpu_models=["RTX 5060 Ti"])
+    listing = {"title": "t", "price_inr": 150000, "specs": specs.normalise("HP OMEN Desktop Ryzen 5 8400F RTX 5060 Ti 16GB", {})}
+    assert matching.evaluate(hunt, listing)[0] == "match"
+    listing["specs"] = specs.normalise("HP OMEN Desktop Ryzen 5 8400F RTX 5060 8GB", {})
+    assert ("RTX 5060", "miss") in matching.evaluate(hunt, listing)[1]

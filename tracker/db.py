@@ -26,6 +26,7 @@ ADDED_COLUMNS = [
     ("listings", "history_checked_at", "TEXT"),
     ("listings", "history_note", "TEXT"),
     ("listings", "history_url", "TEXT"),
+    ("hunts", "kind", "TEXT NOT NULL DEFAULT 'laptop'"),
 ]
 
 

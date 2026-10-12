@@ -7,8 +7,8 @@
 {% endmacro %}
 
 {# A collapsible group of filters. #}
-{% macro panel(title) %}
-<details open class="card group">
+{% macro panel(title, attrs='') %}
+<details open class="card group" {{ attrs }}>
     <summary class="flex cursor-pointer select-none items-center justify-between px-5 py-3.5">
         <span class="text-sm font-semibold">{{ title }}</span>
         <svg class="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
@@ -81,17 +81,29 @@
         <label class="label" for="f-name">Hunt name</label>
         <input class="field" id="f-name" name="name" value="{{ hunt.name }}" placeholder="e.g. Legion with RTX 5080" required>
         {{ error('name') }}
+        <fieldset class="mt-4">
+            <legend class="label">Looking for</legend>
+            <div class="flex flex-wrap gap-2">
+                {% for key, label in catalog.KINDS %}
+                <label class="cursor-pointer">
+                    <input type="radio" class="peer sr-only" name="kind" value="{{ key }}" {{ 'checked' if (hunt.kind or 'laptop') == key }}>
+                    <span class="inline-flex rounded-full border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:peer-checked:border-emerald-600 dark:peer-checked:text-white dark:peer-focus-visible:ring-offset-slate-900">{{ label }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <p class="muted mt-2 text-xs">A tower PC is a desktop without a screen of its own; all-in-ones are left out.</p>
+        </fieldset>
     </div>
 
     <div class="card sticky top-2 z-10 px-5 py-3.5 shadow-sm">
         <div class="flex flex-wrap items-center gap-1.5">
             <span class="muted mr-1 text-xs font-medium">Active filters</span>
             <div id="active-filters" class="contents"></div>
-            <span id="no-filters" class="muted text-sm">None yet: this hunt matches any laptop.</span>
+            <span id="no-filters" class="muted text-sm">None yet: this hunt matches any <span data-kind-word>laptop</span>.</span>
         </div>
     </div>
 
-    {% call panel('Laptop') %}
+    {% call panel('Model') %}
     <div class="sm:col-span-2">
         <span class="label">Brand</span>
         <div class="flex flex-wrap gap-2">
@@ -100,7 +112,7 @@
         {{ other('brands', hunt.brands, catalog.BRANDS, 'Another brand (comma separated)') }}
     </div>
     {{ combo('series', 'Series / model line', hunt.series, [], 'Any, e.g. Legion Pro 7') }}
-    {{ measure('weight_max_kg', 'Max weight', hunt.weight_max_kg, 'kg', [1.5, 2, 2.5, 3], '≤ ') }}
+    <div data-laptop-only>{{ measure('weight_max_kg', 'Max weight', hunt.weight_max_kg, 'kg', [1.5, 2, 2.5, 3], '≤ ') }}</div>
     {% endcall %}
 
     {% call panel('CPU') %}
@@ -143,7 +155,7 @@
     </div>
     {% endcall %}
 
-    {% call panel('Display') %}
+    {% call panel('Display', 'data-laptop-only') %}
     {{ measure('screen_min_in', 'Screen size, from', hunt.screen_min_in, 'in', catalog.SCREEN_INCHES, 'Screen ≥ ') }}
     {{ measure('screen_max_in', 'Screen size, up to', hunt.screen_max_in, 'in', catalog.SCREEN_INCHES, 'Screen ≤ ') }}
     <div>
@@ -199,6 +211,7 @@
             {% endfor %}
         </div>
         <p class="muted mt-2 text-xs">A brand's own store is searched only when the hunt includes that brand, or has no brand filter.</p>
+        <p class="muted mt-1 hidden text-xs" data-tower-only>The ASUS, Acer, Apple and Samsung stores do not sell tower PCs, so a tower hunt skips them.</p>
         {{ error('retailers') }}
     </fieldset>
     {% endcall %}

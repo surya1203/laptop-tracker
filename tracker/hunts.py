@@ -8,7 +8,7 @@ from .db import get_db, now
 
 LIST_FIELDS = ("brands", "gpu_models", "panels", "retailers")
 FILTER_FIELDS = (
-    "brands", "series",
+    "kind", "brands", "series",
     "cpu_brand", "cpu_family", "cpu_model",
     "gpu_brand", "gpu_models", "vram_min_gb",
     "ram_min_gb", "ram_type",
@@ -18,6 +18,9 @@ FILTER_FIELDS = (
 )
 ALERT_FIELDS = ("alert_new_low", "alert_back_in_stock", "alert_target_inr", "alert_drop_pct", "alert_new_match")
 COLUMNS = ("name",) + FILTER_FIELDS + ALERT_FIELDS
+
+# Filters that only make sense for something with a screen you carry; a tower hunt leaves them unset.
+LAPTOP_ONLY_FIELDS = ("screen_min_in", "screen_max_in", "resolution_min", "refresh_min_hz", "panels", "weight_max_kg")
 
 # How long a deleted hunt stays restorable. The Undo toast shows for 10 seconds;
 # the extra time covers a slow click.
@@ -48,6 +51,11 @@ def size(gb):
     return f"{gb} GB"
 
 
+def kind(hunt):
+    """'laptop' or 'tower'. Hunts saved before towers were added are laptop hunts."""
+    return hunt.get("kind") or "laptop"
+
+
 def describe(hunt):
     """Every filter that is set, as (group, label, value, chips) rows in form order."""
     rows = []
@@ -55,10 +63,13 @@ def describe(hunt):
     def add(group, label, value, chips):
         rows.append((group, label, value, chips))
 
+    group = catalog.KIND_LABELS.get(kind(hunt), "Laptop")
+    if kind(hunt) != "laptop":
+        add(group, "Type", group, [group])
     if hunt["brands"]:
-        add("Laptop", "Brand", ", ".join(hunt["brands"]), list(hunt["brands"]))
+        add(group, "Brand", ", ".join(hunt["brands"]), list(hunt["brands"]))
     if hunt["series"]:
-        add("Laptop", "Series", hunt["series"], [hunt["series"]])
+        add(group, "Series", hunt["series"], [hunt["series"]])
 
     for field, label in (("cpu_brand", "CPU brand"), ("cpu_family", "CPU family"), ("cpu_model", "CPU model")):
         if hunt[field]:
@@ -125,7 +136,7 @@ def filter_groups(hunt):
 
 def blank():
     hunt = {field: None for field in COLUMNS}
-    hunt.update(name="", brands=[], gpu_models=[], panels=[], retailers=list(catalog.DEFAULT_RETAILERS),
+    hunt.update(name="", kind="laptop", brands=[], gpu_models=[], panels=[], retailers=list(catalog.DEFAULT_RETAILERS),
                 alert_new_low=1, alert_back_in_stock=1, alert_new_match=1)
     return hunt
 
@@ -193,6 +204,7 @@ def parse_form(form):
     if not hunt["name"]:
         errors["name"] = "Give the hunt a name."
 
+    hunt["kind"] = form.get("kind") if form.get("kind") in catalog.KIND_LABELS else "laptop"
     hunt["brands"] = _multi(form, "brands", catalog.BRANDS)
     hunt["series"] = _text(form, "series")
     hunt["cpu_brand"] = _text(form, "cpu_brand", catalog.CPU_FAMILIES)
@@ -223,8 +235,14 @@ def parse_form(form):
     hunt["resolution_min"] = resolution
 
     hunt["retailers"] = [r for r in form.getlist("retailers") if r in catalog.RETAILER_LABELS]
+    if hunt["kind"] == "tower":
+        for field in LAPTOP_ONLY_FIELDS:
+            hunt[field] = [] if field in LIST_FIELDS else None
+            errors.pop(field, None)
+        hunt["retailers"] = [r for r in hunt["retailers"] if r in catalog.TOWER_RETAILERS]
     if not hunt["retailers"]:
-        errors["retailers"] = "Pick at least one store to search."
+        errors["retailers"] = ("Pick at least one store that sells tower PCs." if hunt["kind"] == "tower"
+                               else "Pick at least one store to search.")
 
     hunt["alert_new_low"] = int(bool(form.get("alert_new_low")))
     hunt["alert_back_in_stock"] = int(bool(form.get("alert_back_in_stock")))

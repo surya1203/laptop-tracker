@@ -50,7 +50,7 @@ def _cards(page, phrase):
     return [card for card in page.evaluate(_CARDS_JS) if card["href"] and card["reference"]]
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     query = without_brand(query, "Acer")
     hits, seen = [], set()
     for card in _cards(page, query):

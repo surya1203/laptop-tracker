@@ -26,7 +26,7 @@ def _name(url):
     return clean(f"Apple {line.replace('-', ' ').title().replace('Macbook', 'MacBook')} {text}")
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     wanted = without_brand(query, "Apple").lower()
     lines = [line for line in LINES if line.split("-")[1] in wanted] or LINES
     found = {}

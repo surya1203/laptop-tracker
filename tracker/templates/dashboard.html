@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
     <h1 class="text-2xl font-semibold">Dashboard</h1>
-    <p class="muted mt-1 text-sm">What changed on the laptops you are tracking.</p>
+    <p class="muted mt-1 text-sm">What changed on the laptops and tower PCs you are tracking.</p>
 </header>
 
 <div class="grid gap-4 sm:grid-cols-3">
@@ -14,7 +14,7 @@
         <p class="muted mt-1 text-xs">{{ hunts|length - active }} paused</p>
     </div>
     <div class="card p-5">
-        <p class="muted text-xs font-medium">Tracked laptops</p>
+        <p class="muted text-xs font-medium">Tracked listings</p>
         <p class="mt-1 text-3xl font-semibold tabular-nums">{{ tracked }}</p>
         <p class="muted mt-1 text-xs">{% if tracked %}{{ at_low|length }} at {{ 'its' if at_low|length == 1 else 'their' }} lowest price so far{% else %}Tick listings in a hunt to track them{% endif %}</p>
     </div>

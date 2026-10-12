@@ -106,8 +106,8 @@ def _cpu(table, title):
         if bare:
             family = f"Core i{bare.group(1)}"
     # "Ryzen 7 260" / "Core Ultra 9 275HX" first, then a bare "13650HX" elsewhere in the text.
-    model = (re.search(r"(?:ultra\s*[3579]|\bi[3579]|ryzen\s*(?:ai\s*)?[3579])\s*(?:processor\s*)?-?\s*(\d{3,5}[a-z]{0,2})\b(?!\s*(?:gb|tb|hz))", text, re.I)
-             or re.search(r"\b(\d{3,5}(?:HX|HS|HK|H|U|P|V|K))\b", text, re.I))
+    model = (re.search(r"(?:ultra\s*[3579]|\bi[3579]|ryzen\s*(?:ai\s*)?[3579])\s*(?:processor\s*)?-?\s*(\d{3,5}(?:x3d|[a-z]{0,2}))\b(?!\s*(?:gb|tb|hz))", text, re.I)
+             or re.search(r"\b(\d{3,5}(?:X3D|HX|HS|HK|KF|KS|H|U|P|V|K|F))\b", text, re.I))
     return brand, family, model.group(1).upper() if model else None, text
 
 

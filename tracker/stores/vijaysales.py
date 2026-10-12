@@ -3,7 +3,7 @@ import html
 import re
 from urllib.parse import quote
 
-from .base import Hit, Product, StoreError, clean, fetch_json, relevant, rupees
+from .base import Hit, Product, StoreError, clean, fetch_json, is_tower, relevant, rupees
 
 KEY = "vijaysales"
 LABEL = "Vijay Sales"
@@ -21,13 +21,19 @@ def prepare(page, pincode):
     return True
 
 
-def search(page, query, limit):
+# How the site names the two categories.
+CATEGORIES = {"laptop": "Laptops", "tower": "Desktops"}
+
+
+def search(page, query, limit, kind="laptop"):
     # The site packs the paging into the search phrase itself.
     data = fetch_json(page, f"{SEARCH_API}?q={quote(f'{query}&page=1&rows=40', safe='')}&fq=", LABEL)
     hits = []
     for item in (data.get("response") or {}).get("products") or []:
         title = clean(item.get("title"))
-        if item.get("l3") != "Laptops" or not item.get("productUrl") or not relevant(title, query):
+        if item.get("l3") != CATEGORIES[kind] or not item.get("productUrl") or not relevant(title, query):
+            continue
+        if kind == "tower" and not is_tower(title):
             continue
         hits.append(Hit(url=item["productUrl"], title=title))
         if len(hits) >= limit:

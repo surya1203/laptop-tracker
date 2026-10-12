@@ -2,14 +2,14 @@
 import re
 from urllib.parse import quote
 
-from .base import Hit, Product, StoreError, clean, fetch_json, ld_product, relevant, rupees
+from .base import Hit, Product, StoreError, clean, fetch_json, is_tower, ld_product, relevant, rupees
 
 KEY = "croma"
 LABEL = "Croma"
 HOME = "https://www.croma.com"
 API = "https://api.croma.com"
-# Croma's "Laptops" category, to keep accessories out of the results.
-LAPTOPS_CATEGORY = "20"
+# Croma's "Laptops" and "Desktops" categories, to keep accessories out of the results.
+CATEGORIES = {"laptop": "20", "tower": "25"}
 # Croma prices by PIN code; this is the one its site uses before a visitor picks a location.
 DEFAULT_PINCODE = "400049"
 # The key Croma's own pages send with a delivery check.
@@ -33,13 +33,16 @@ def prepare(page, pincode):
     return True
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     data = fetch_json(page, f"{API}/searchservices/v1/search?currentPage=0&query={quote(query)}%3Arelevance"
                             f"&fields=FULL&channel=WEB&channelCode={DEFAULT_PINCODE}&spellOpt=DEFAULT", LABEL)
     hits = []
     for item in data.get("products") or []:
         title = clean(item.get("name"))
-        if str(item.get("categoryL1")) != LAPTOPS_CATEGORY or not item.get("url") or not relevant(title, query):
+        if str(item.get("categoryL1")) != CATEGORIES[kind] or not item.get("url") or not relevant(title, query):
+            continue
+        # An all-in-one's title leads with its screen ("27 Inch Full HD IPS Display ...") rather than saying so.
+        if kind == "tower" and (not is_tower(title) or re.search(r"\binch\b.*\bdisplay\b", title, re.I)):
             continue
         hits.append(Hit(url=HOME + item["url"], title=title))
         if len(hits) >= limit:

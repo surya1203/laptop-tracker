@@ -34,6 +34,7 @@ def queries(hunt, only_brands=None):
         wanted = [name.lower() for name in only_brands]
         brands = [brand for brand in brands if brand and brand.lower() in wanted] or list(only_brands)[:1]
     gpus = hunt["gpu_models"] or [None]
+    kind = hunt.get("kind") or "laptop"
     phrases = []
     for brand in brands:
         for gpu in gpus:
@@ -41,7 +42,10 @@ def queries(hunt, only_brands=None):
             if not hunt["series"] and not gpu:
                 parts += [hunt["cpu_family"], hunt["gpu_brand"] if hunt["gpu_brand"] != "Apple" else None]
             phrase = " ".join(part for part in parts if part)
-            phrase = f"{phrase} laptop" if "macbook" not in phrase.lower() else phrase
+            if kind == "tower":
+                phrase = f"{phrase} desktop"
+            elif "macbook" not in phrase.lower():
+                phrase = f"{phrase} laptop"
             if phrase not in phrases:
                 phrases.append(phrase)
     return phrases[:MAX_QUERIES]
@@ -66,7 +70,7 @@ def _run_store(store, state, hunt, options, turn):
             per_phrase = math.ceil(options["limit"] / len(phrases))
             hits = {}
             for phrase in phrases:
-                for hit in store.search(page, phrase, per_phrase):
+                for hit in store.search(page, phrase, per_phrase, hunt.get("kind") or "laptop"):
                     if hit.url not in skip:
                         hits.setdefault(hit.url, hit)
                 state["found"] = len(hits)
@@ -124,7 +128,7 @@ def _run(job, hunt, options):
 
 def start(hunt, options):
     """Begin a search unless one is already running for this hunt. Returns False if none could start."""
-    keys = [key for key in hunt["retailers"] if key in STORES and sells(STORES[key], hunt["brands"])]
+    keys = [key for key in hunt["retailers"] if key in STORES and sells(STORES[key], hunt["brands"], hunt.get("kind") or "laptop")]
     if not keys:
         return False
     with _lock:

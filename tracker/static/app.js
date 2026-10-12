@@ -51,8 +51,26 @@ if (form) {
     // Brand -> series suggestions (all ticked brands, or every brand when none is ticked).
     const syncSeries = () => {
         const ticked = [...form.querySelectorAll('input[name="brands"]:checked')].map((box) => box.value);
-        const series = ticked.flatMap((brand) => lookup(catalog.series, brand) || []);
-        fill('dl-series', ticked.length ? series : everything(catalog.series));
+        const names = field('kind').value === 'tower' ? catalog.tower_series : catalog.series;
+        const series = ticked.flatMap((brand) => lookup(names, brand) || []);
+        fill('dl-series', ticked.length ? series : everything(names));
+    };
+
+    // Laptop or tower: a tower has no screen or carrying weight to filter on, and fewer stores sell one.
+    const syncKind = () => {
+        const tower = field('kind').value === 'tower';
+        form.querySelectorAll('[data-laptop-only]').forEach((part) => {
+            part.classList.toggle('hidden', tower);
+            part.querySelectorAll('input, select').forEach((input) => { input.disabled = tower; });
+        });
+        form.querySelectorAll('[data-tower-only]').forEach((part) => part.classList.toggle('hidden', !tower));
+        form.querySelectorAll('input[name="retailers"]').forEach((box) => {
+            box.disabled = tower && !catalog.tower_retailers.includes(box.value);
+            box.closest('label').classList.toggle('opacity-50', box.disabled);
+        });
+        form.querySelectorAll('[data-kind-word]').forEach((word) => { word.textContent = tower ? 'tower PC' : 'laptop'; });
+        field('series').placeholder = tower ? 'Any, e.g. Legion Tower 5' : 'Any, e.g. Legion Pro 7';
+        syncSeries();
     };
 
     // CPU brand -> CPU family choices. A family from another brand is cleared.
@@ -87,7 +105,7 @@ if (form) {
     const syncChips = () => {
         const chips = [];
         form.querySelectorAll('[data-chip]').forEach((input) => {
-            const text = chipText(input);
+            const text = input.disabled ? '' : chipText(input);
             if (!text) return;
             const chip = document.createElement('button');
             chip.type = 'button';
@@ -107,12 +125,13 @@ if (form) {
     form.addEventListener('input', (event) => {
         const name = event.target.name;
         if (name === 'brands') syncSeries();
+        if (name === 'kind') syncKind();
         if (name === 'cpu_brand') syncCpu(true);
         if (name === 'gpu_brand') syncGpu(true);
         syncChips();
     });
 
-    syncSeries();
+    syncKind();
     syncCpu(false);
     syncGpu(false);
     syncChips();

@@ -128,7 +128,7 @@ def send_discord(webhook, body, card=None):
             shown.append(entry)
             length += len(entry) + 2
         payload = {"content": f"**{card['headline'][:1900]}**", "embeds": [{
-            "author": {"name": "Tracked laptops"}, "description": "\n\n".join(shown),
+            "author": {"name": "Tracked listings"}, "description": "\n\n".join(shown),
             "color": COLOURS["new_low"] if card["news"] else 0x64748B, "footer": {"text": "PC Tracker"},
         }]}
     elif card:
@@ -288,7 +288,7 @@ def update_headline(news, items, since):
             counts[RULES[alert["rule"]]] = counts.get(RULES[alert["rule"]], 0) + 1
         return ", ".join(label if count == 1 else f"{label} ×{count}" for label, count in counts.items())
     moved = sum(1 for item in items if item["change_inr"] and (item["checked_at"] or "") >= since)
-    total = f"{len(items)} tracked laptop{'' if len(items) == 1 else 's'}"
+    total = f"{len(items)} tracked listing{'' if len(items) == 1 else 's'}"
     return f"{total}: {moved} price{'' if moved == 1 else 's'} changed" if moved else f"{total}: no price change"
 
 

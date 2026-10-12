@@ -10,7 +10,7 @@
             {{ count }} listing{{ '' if count == 1 else 's' }}. Last checked {{ schedule.last_at|when }}{% if schedule.result.failed %} ({{ schedule.result.failed }} could not be read){% endif %}.
             {% if schedule.enabled %}Next check {{ schedule.next_at|when }}, then every {{ schedule.interval }} hour{{ '' if schedule.interval == 1 else 's' }}.{% else %}Automatic checks are switched off.{% endif %}
             {% else %}
-            Every laptop you are tracking, with its current price and lows.
+            Everything you are tracking, with its current price and lows.
             {% endif %}
         </p>
     </div>

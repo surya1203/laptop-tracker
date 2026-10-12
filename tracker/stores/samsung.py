@@ -31,7 +31,7 @@ def _title(model):
     return clean(f"Samsung {model.get('displayName') or ''} ({model.get('modelCode') or ''})")
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     # The range is small enough to list whole; models closest to the phrase come first.
     words = re.findall(r"[a-z0-9]+", without_brand(query, "Samsung").lower())
     def closeness(model):

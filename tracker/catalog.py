@@ -1,5 +1,9 @@
 """The fixed choices behind every filter. Typed values outside these lists are still accepted."""
 
+# What a hunt looks for: (key, label). A tower is a desktop PC without a screen of its own.
+KINDS = [("laptop", "Laptop"), ("tower", "Tower PC")]
+KIND_LABELS = dict(KINDS)
+
 BRANDS = ["Lenovo", "ASUS", "HP", "Dell", "MSI", "Acer", "Apple", "Samsung", "Gigabyte"]
 
 SERIES = {
@@ -14,6 +18,16 @@ SERIES = {
     "Gigabyte": ["AORUS Master 16", "AORUS 16X", "AERO 16"],
 }
 
+TOWER_SERIES = {
+    "Lenovo": ["Legion Tower 7", "Legion Tower 5", "LOQ Tower", "IdeaCentre Tower", "ThinkCentre"],
+    "ASUS": ["ROG Strix G16CH", "ROG G700", "TUF Gaming T500"],
+    "HP": ["OMEN 35L", "OMEN 16L", "Victus 15L", "Pavilion Desktop"],
+    "Dell": ["Alienware Area-51", "Alienware Aurora", "Dell Pro Tower", "Dell Tower"],
+    "MSI": ["MAG Infinite", "MEG Trident", "Codex"],
+    "Acer": ["Predator Orion", "Nitro 50", "Aspire TC"],
+    "Apple": ["Mac Studio", "Mac mini"],
+}
+
 CPU_FAMILIES = {
     "Intel": ["Core Ultra 9", "Core Ultra 7", "Core Ultra 5", "Core 9", "Core 7", "Core 5",
               "Core i9", "Core i7", "Core i5", "Core i3"],
@@ -23,9 +37,9 @@ CPU_FAMILIES = {
 }
 
 GPU_MODELS = {
-    "NVIDIA": ["RTX 5090", "RTX 5080", "RTX 5070 Ti", "RTX 5070", "RTX 5060", "RTX 5050",
-               "RTX 4090", "RTX 4080", "RTX 4070", "RTX 4060", "RTX 4050"],
-    "AMD": ["RX 7900M", "RX 7700S", "RX 7600M XT", "RX 7600S", "Radeon integrated"],
+    "NVIDIA": ["RTX 5090", "RTX 5080", "RTX 5070 Ti", "RTX 5070", "RTX 5060 Ti", "RTX 5060", "RTX 5050",
+               "RTX 4090", "RTX 4080", "RTX 4070 Ti", "RTX 4070", "RTX 4060 Ti", "RTX 4060", "RTX 4050"],
+    "AMD": ["RX 9070 XT", "RX 9070", "RX 9060 XT", "RX 7900M", "RX 7700S", "RX 7600M XT", "RX 7600S", "Radeon integrated"],
     "Intel": ["Arc A770M", "Arc A570M", "Arc integrated", "Iris Xe"],
     "Apple": ["Apple integrated"],
 }
@@ -68,8 +82,11 @@ BRAND_STORES = [
 ]
 RETAILER_LABELS = {key: label for key, label, *_ in MULTI_BRAND_STORES + BRAND_STORES}
 DEFAULT_RETAILERS = list(RETAILER_LABELS)
+# The stores that sell tower PCs. The ASUS, Acer, Apple and Samsung stores list none.
+TOWER_RETAILERS = ("amazon", "flipkart", "croma", "vijaysales", "reliancedigital", "lenovo", "dell")
 
 
 def for_browser():
     """The brand-dependent lists the form needs for cascading dropdowns."""
-    return {"series": SERIES, "cpu_families": CPU_FAMILIES, "gpu_models": GPU_MODELS}
+    return {"series": SERIES, "tower_series": TOWER_SERIES, "cpu_families": CPU_FAMILIES, "gpu_models": GPU_MODELS,
+            "tower_retailers": list(TOWER_RETAILERS)}

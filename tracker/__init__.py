@@ -1,4 +1,4 @@
-"""PC Tracker: describe a laptop, preview store listings, track prices, get alerts."""
+"""PC Tracker: describe a laptop or tower PC, preview store listings, track prices, get alerts."""
 from datetime import datetime
 
 from flask import Flask

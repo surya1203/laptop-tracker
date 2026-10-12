@@ -4,7 +4,7 @@ Its delivery check needs requests signed by the site's own scripts, so delivery 
 """
 from urllib.parse import quote, urlsplit
 
-from .base import Hit, Product, StoreError, clean, fetch_json, relevant, rupees
+from .base import Hit, Product, StoreError, clean, fetch_json, is_tower, relevant, rupees
 
 KEY = "reliancedigital"
 LABEL = "Reliance Digital"
@@ -18,18 +18,20 @@ def prepare(page, pincode):
     return True
 
 
-def _is_laptop(item):
+def _is_kind(item, kind):
     names = " ".join(str(category.get("name", "")) for category in item.get("categories") or []).lower()
+    if kind == "tower":  # filed under "Desktops & All-In-Ones"
+        return "desktop" in names and is_tower(str(item.get("name")))
     return "laptop" in names and "bag" not in names and "accessor" not in names
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     data = fetch_json(page, f"/ext/raven-api/catalog/v1.0/products?q={quote(query)}&page_no=1&page_size=24"
                             "&page_type=number&page_id=%2A&f=page_type%3Anumber", LABEL)
     hits = []
     for item in data.get("items") or []:
         title = clean(item.get("name"))
-        if not item.get("slug") or not _is_laptop(item) or not relevant(title, query):
+        if not item.get("slug") or not _is_kind(item, kind) or not relevant(title, query):
             continue
         hits.append(Hit(url=f"{HOME}/product/{item['slug']}", title=title))
         if len(hits) >= limit:

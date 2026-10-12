@@ -1,6 +1,6 @@
 # PC Tracker
 
-Describe the laptop you want, preview what Indian stores have, pick the listings to track, and get told when one hits a new low. The full design is in [PLAN.md](PLAN.md).
+Describe the laptop or tower PC you want, preview what Indian stores have, pick the listings to track, and get told when one hits a new low. The full design is in [PLAN.md](PLAN.md).
 
 > **Disclaimer.** This project was vibecoded: the code was written with an AI coding assistant (Claude Code). The developer, Surya Giri, built it for educational and personal use, and made the executive decisions throughout: what to build, which stores to cover, how tracking and alerts should behave, and what to change after trying it. It reads public store pages for one person's own price tracking; treat it as a personal learning project, not a supported product.
 
@@ -48,6 +48,10 @@ Open a hunt and press **Search now**. Each store is driven in its own background
 | Samsung Store | samsung.com/in | No |
 
 A brand's own store is searched only when the hunt includes that brand or has no brand filter. Not covered: HP's store (hp.com/in-en/shop) turns automated browsers away, and MSI and Gigabyte do not sell online in India themselves; their laptops are still found at the five multi-brand stores.
+
+### Tower PCs
+
+A hunt is for laptops or for tower PCs (desktops without a screen of their own; all-in-ones are left out). A tower hunt has no screen or weight filters and is searched at seven stores: Amazon, Flipkart, Croma, Vijay Sales, Reliance Digital, the Lenovo Store and the Dell Store. The ASUS, Acer, Apple and Samsung stores list no towers. When this was tried in October 2026, Croma, Vijay Sales and Reliance Digital stocked only the Mac mini and Mac Studio outside all-in-ones.
 
 Notes on individual stores:
 

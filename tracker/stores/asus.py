@@ -38,7 +38,7 @@ def _name(url):
     return name if name.upper().startswith("ASUS") else f"ASUS {name}"
 
 
-def search(page, query, limit):
+def search(page, query, limit, kind="laptop"):
     if not page.url.startswith(LISTING):
         prepare(page, None)
     words = re.findall(r"[a-z0-9]+", without_brand(query, "ASUS").lower())

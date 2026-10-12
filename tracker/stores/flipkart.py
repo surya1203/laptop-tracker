@@ -9,13 +9,13 @@ import html
 import re
 from urllib.parse import parse_qs, quote_plus, urlsplit
 
-from .base import Hit, Product, StoreError, clean, rupees
+from .base import Hit, Product, StoreError, clean, relevant, rupees
 
 KEY = "flipkart"
 LABEL = "Flipkart"
 HOME = "https://www.flipkart.com"
-# Flipkart's "Laptops" category, to keep accessories out of the results.
-LAPTOPS_SID = "6bo,b5g"
+# Flipkart's "Laptops" and "Tower PCs" categories, to keep accessories out of the results.
+SIDS = {"laptop": "6bo,b5g", "tower": "6bo,nl4,dze"}
 
 _SEARCH_JS = """() => [...document.querySelectorAll('a[href*="/p/itm"]')].map((a) => ({
     href: a.getAttribute('href'),
@@ -57,8 +57,8 @@ def prepare(page, pincode):
     return True
 
 
-def search(page, query, limit):
-    page.goto(f"{HOME}/search?q={quote_plus(query)}&sid={quote_plus(LAPTOPS_SID)}", wait_until="domcontentloaded", timeout=45000)
+def search(page, query, limit, kind="laptop"):
+    page.goto(f"{HOME}/search?q={quote_plus(query)}&sid={quote_plus(SIDS[kind])}", wait_until="domcontentloaded", timeout=45000)
     try:
         page.wait_for_selector('a[href*="/p/itm"]', timeout=15000)
     except Exception:
@@ -69,6 +69,9 @@ def search(page, query, limit):
     for item in page.evaluate(_SEARCH_JS):
         url = canonical(item["href"])
         if url in seen or item["ad"]:
+            continue
+        # Its Tower PCs shelf pads every search with unrelated refurbished and assembled machines.
+        if kind == "tower" and not relevant(item["title"], query):
             continue
         seen.add(url)
         hits.append(Hit(url=url, title=clean(item["title"])))

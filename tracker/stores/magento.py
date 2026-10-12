@@ -58,7 +58,7 @@ _PRODUCT_JS = """() => {
 
 
 def search(page, home, query, limit, label):
-    page.goto(f"{home}/catalogsearch/result/?q={quote_plus(query)}", wait_until="domcontentloaded", timeout=45000)
+    page.goto(f"{home}/catalogsearch/result/?q={quote_plus(query)}&product_list_limit=36", wait_until="domcontentloaded", timeout=45000)
     try:
         page.wait_for_selector(".product-item-info, .message.notice", timeout=15000)
     except Exception:

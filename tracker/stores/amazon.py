@@ -7,11 +7,12 @@ from .base import Hit, Product, StoreError, clean, rupees
 KEY = "amazon"
 LABEL = "Amazon"
 HOME = "https://www.amazon.in"
-# Keeps accessories (bags, RAM sticks, skins) out of the results.
-LAPTOPS_NODE = "1375424031"
+# Amazon's "Laptops" and "Tower PCs" categories, to keep accessories (bags, RAM sticks, skins) out of the results.
+NODES = {"laptop": "1375424031", "tower": "10384421031"}
 
 _SEARCH_JS = """() => [...document.querySelectorAll('div[data-component-type="s-search-result"][data-asin]')].map((item) => {
-    const heading = item.querySelector('h2');
+    // Some result layouts put the brand in a heading of its own, above the title.
+    const heading = [...item.querySelectorAll('h2')].sort((a, b) => b.textContent.length - a.textContent.length)[0];
     return {
         asin: item.dataset.asin,
         title: heading ? (heading.getAttribute('aria-label') || heading.textContent) : '',
@@ -93,8 +94,8 @@ def prepare(page, pincode):
     return False
 
 
-def search(page, query, limit):
-    _goto(page, f"{HOME}/s?k={quote_plus(query)}&rh=n%3A{LAPTOPS_NODE}")
+def search(page, query, limit, kind="laptop"):
+    _goto(page, f"{HOME}/s?k={quote_plus(query)}&rh=n%3A{NODES[kind]}")
     try:
         page.wait_for_selector('div[data-component-type="s-search-result"], .s-no-outline, #noResultsTitle', timeout=15000)
     except Exception:

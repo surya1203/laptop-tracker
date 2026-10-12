@@ -1,6 +1,8 @@
 """Dell India's own store (dellstore.com, where dell.com/en-in sends shoppers)."""
+import re
+
 from . import magento
-from .base import without_brand
+from .base import is_tower, without_brand
 
 KEY = "dell"
 LABEL = "Dell Store"
@@ -13,8 +15,12 @@ def prepare(page, pincode):
     return True
 
 
-def search(page, query, limit):
-    return magento.search(page, HOME, without_brand(query, "Dell"), limit, LABEL)
+def search(page, query, limit, kind="laptop"):
+    hits = magento.search(page, HOME, without_brand(query, "Dell"), 36 if kind == "tower" else limit, LABEL)
+    if kind == "tower":  # the store has no categories to search within, so go by what a listing calls itself
+        hits = [hit for hit in hits if re.search(r"desktop|tower", hit.title, re.I) and is_tower(hit.title)
+                and not re.search(r"\b(slim|micro)\b", hit.title, re.I)]
+    return hits[:limit]
 
 
 def read(page, url, pincode):

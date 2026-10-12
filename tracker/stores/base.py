@@ -3,7 +3,7 @@
 A store module has:
     KEY, LABEL
     prepare(page, pincode)        open the store and set the delivery PIN code, once per session
-    search(page, query, limit)    -> [Hit, ...]
+    search(page, query, limit, kind)  -> [Hit, ...]; kind is "laptop" or "tower"
     read(page, url, pincode)      -> Product
 and optionally:
     BRANDS                        a brand's own store lists only these brands, so other hunts skip it
@@ -52,9 +52,14 @@ def clean(text):
 
 def relevant(title, query):
     """Whether a result is worth opening: stores pad thin searches with unrelated products."""
-    words = [word for word in re.findall(r"[a-z0-9]+", query.lower()) if word not in ("laptop", "laptops")]
+    words = [word for word in re.findall(r"[a-z0-9]+", query.lower()) if word not in ("laptop", "laptops", "desktop", "desktops")]
     text = re.sub(r"[^a-z0-9]", "", title.lower())
     return sum(word in text for word in words) * 2 >= len(words)
+
+
+def is_tower(title):
+    """Whether a desktop listing is a tower: stores file all-in-ones (a PC built into a screen) with them."""
+    return not re.search(r"all[\s-]*in[\s-]*one|\baio\b", title, re.I)
 
 
 def without_brand(query, brand):

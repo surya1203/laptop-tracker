@@ -5,7 +5,7 @@
 <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
     <div>
         <h1 class="text-2xl font-semibold">Hunts</h1>
-        <p class="muted mt-1 text-sm">Each hunt is a saved description of the laptop you want.</p>
+        <p class="muted mt-1 text-sm">Each hunt is a saved description of the laptop or tower PC you want.</p>
     </div>
     <a class="btn btn-primary" href="{{ url_for('main.hunt_new') }}">New hunt</a>
 </header>
@@ -17,7 +17,7 @@
 {% else %}
 <div class="card border-dashed px-6 py-16 text-center">
     <h2 class="text-base font-semibold">No hunts yet</h2>
-    <p class="muted mx-auto mt-1 max-w-sm text-sm">Describe the laptop you are after: brand, GPU, RAM, budget. Fill only what matters to you.</p>
+    <p class="muted mx-auto mt-1 max-w-sm text-sm">Describe the laptop or tower PC you are after: brand, GPU, RAM, budget. Fill only what matters to you.</p>
     <a class="btn btn-primary mt-5" href="{{ url_for('main.hunt_new') }}">Create your first hunt</a>
 </div>
 {% endif %}
