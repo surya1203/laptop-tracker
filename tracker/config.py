@@ -35,4 +35,5 @@ class Config:
     # Alert channels. The addresses to notify are set in Settings; the credentials stay here.
     SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "").strip()
     GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "")
-    CALLMEBOT_API_KEY = os.environ.get("CALLMEBOT_API_KEY", "").strip()
+    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()

@@ -61,7 +61,7 @@ def record(conn, listing_id, product, specs, pincode):
 def points(conn, listing_id):
     """A listing's price checks, oldest first."""
     return conn.execute(
-        "SELECT price_inr, mrp_inr, in_stock, checked_at FROM price_points WHERE listing_id = ? ORDER BY checked_at, id",
+        "SELECT price_inr, mrp_inr, in_stock, checked_at, source FROM price_points WHERE listing_id = ? ORDER BY checked_at, id",
         (listing_id,),
     ).fetchall()
 

@@ -1,11 +1,14 @@
 """Alerts: decides when a price check is worth telling you about, and sends it.
 
-Rules are set per hunt. Every alert is written to the in-app feed; email (Gmail)
-and WhatsApp (CallMeBot) are sent as well when they are set up in Settings, outside quiet hours.
+Rules are set per hunt. Every alert is written to the in-app feed; Discord (a channel
+webhook), email (Gmail) and Telegram (your own bot) are sent as well when they are set up in Settings,
+outside quiet hours.
 A rule does not fire twice for the same listing within the cooldown.
 """
+import html
 import json
 import smtplib
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -19,9 +22,12 @@ RULES = {
     "target": "Target price reached",
     "drop": "Price drop",
     "back_in_stock": "Back in stock",
+    "new_match": "New match",
     "test": "Test alert",
 }
 DEFAULT_COOLDOWN_HOURS = 24
+# The stripe down the side of a Discord alert.
+COLOURS = {"new_low": 0x16A34A, "target": 0x2563EB, "drop": 0xD97706, "back_in_stock": 0x7C3AED, "new_match": 0x0891B2}
 
 
 def rupees(amount):
@@ -33,6 +39,10 @@ def rupees(amount):
         groups.insert(0, head[-2:])
         head = head[:-2]
     return "₹" + ",".join(([head] if head else []) + groups + [tail])
+
+
+def price_text(amount):
+    return rupees(amount) if amount else "Price not shown"
 
 
 def triggered(hunt, points):
@@ -78,7 +88,8 @@ def credentials(conn, fallback=None):
     return {
         "sender": _setting(conn, "sender_email") or fallback.get("sender") or "",
         "password": (_setting(conn, "gmail_app_password") or fallback.get("password") or "").replace(" ", ""),
-        "callmebot_key": _setting(conn, "callmebot_api_key") or fallback.get("callmebot_key") or "",
+        "telegram_token": _setting(conn, "telegram_bot_token") or fallback.get("telegram_token") or "",
+        "discord_webhook": _setting(conn, "discord_webhook_url") or fallback.get("discord_webhook") or "",
     }
 
 
@@ -102,26 +113,90 @@ def send_email(mail, to, subject, body):
             server.send_message(message)
 
 
-def send_whatsapp(mail, phone, body):
-    if not mail.get("callmebot_key"):
-        raise RuntimeError("Enter your CallMeBot key in Settings first.")
-    query = urllib.parse.urlencode({"phone": phone, "text": body, "apikey": mail["callmebot_key"]})
-    with urllib.request.urlopen(f"https://api.callmebot.com/whatsapp.php?{query}", timeout=30) as response:
-        answer = response.read().decode("utf-8", "replace")
-    if response.status != 200 or "error" in answer.lower():
-        raise RuntimeError(f"CallMeBot answered: {answer[:120]}")
+def send_discord(webhook, body, card=None):
+    """Post to a Discord channel. With a `card` (see `after_check`) the alert is laid out as an embed."""
+    if not webhook:
+        raise RuntimeError("Paste a Discord webhook link in Settings first.")
+    payload = {"content": body[:2000]}
+    if card:
+        embed = {
+            "author": {"name": RULES[card["rule"]]},
+            "title": card["title"][:250], "url": card["url"],
+            "description": f"**{price_text(card['price'])}**\n{card['detail']}",
+            "color": COLOURS.get(card["rule"], 0x64748B),
+            "fields": [{"name": "Store", "value": card["store"], "inline": True},
+                       {"name": "Hunt", "value": card["hunt"][:200], "inline": True}],
+            "footer": {"text": "Laptop Tracker"},
+        }
+        if (card.get("image") or "").startswith("http"):
+            embed["thumbnail"] = {"url": card["image"]}
+        # The one-line content is what a phone notification shows; the embed carries the rest.
+        payload = {"content": f"**{RULES[card['rule']]}**: {price_text(card['price'])}", "embeds": [embed]}
+    request = urllib.request.Request(
+        webhook, data=json.dumps(payload).encode("utf-8"),
+        # Discord turns away Python's default User-Agent.
+        headers={"Content-Type": "application/json", "User-Agent": "LaptopTracker/1.0"},
+    )
+    try:
+        urllib.request.urlopen(request, timeout=30).close()
+    except urllib.error.HTTPError as error:
+        gone = error.code in (401, 404)
+        raise RuntimeError("Discord no longer knows this webhook. Create a new one and paste its link in Settings."
+                           if gone else f"Discord answered {error.code}.") from error
 
 
-def deliver(conn, mail, subject, body, quiet_ok=False):
+def _telegram(token, method, data=None):
+    """Call Telegram's own Bot API and return its result."""
+    request = urllib.request.Request(f"https://api.telegram.org/bot{token}/{method}",
+                                     data=urllib.parse.urlencode(data or {}).encode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)["result"]
+    except urllib.error.HTTPError as error:
+        try:
+            reason = json.load(error)["description"]
+        except Exception:
+            reason = f"error {error.code}"
+        if error.code in (401, 404):
+            reason = "it does not know this bot token. Copy it again from BotFather."
+        raise RuntimeError(f"Telegram answered: {reason}") from error
+
+
+def telegram_chat(token):
+    """The chat that last messaged the bot, which is where alerts should go. None if nobody has yet."""
+    for update in reversed(_telegram(token, "getUpdates")):
+        chat = (update.get("message") or {}).get("chat")
+        if chat:
+            return str(chat["id"])
+    return None
+
+
+def send_telegram(token, chat, body, card=None):
+    if not token:
+        raise RuntimeError("Paste your Telegram bot's token in Settings first.")
+    if not chat:
+        raise RuntimeError("Send your bot a message in Telegram, then press Save so the tracker can find the chat.")
+    message = {"chat_id": chat, "text": body[:4096], "disable_web_page_preview": "true"}
+    if card:
+        e = html.escape
+        message.update(parse_mode="HTML", text=(
+            f"<b>{e(RULES[card['rule']])}: {price_text(card['price'])}</b>\n{e(card['detail'])}\n\n"
+            f"<a href=\"{e(card['url'])}\">{e(card['title'][:250])}</a>\n{e(card['store'])} · hunt “{e(card['hunt'])}”"))
+    _telegram(token, "sendMessage", message)
+
+
+def deliver(conn, mail, subject, body, quiet_ok=False, card=None):
     """Send to every channel that is set up. Returns (channels reached, problems)."""
     reached, problems = ["feed"], []
     mail = credentials(conn, mail)
     if not quiet_ok and in_quiet_hours(_setting(conn, "quiet_start"), _setting(conn, "quiet_end")):
         return reached, ["quiet hours: shown here only"]
     for channel, address, send in (
+        ("discord", mail["discord_webhook"], lambda to: send_discord(to, body, card)),
         ("email", _setting(conn, "notify_email") or (mail["sender"] if mail["password"] else None),
          lambda to: send_email(mail, to, subject, body)),
-        ("whatsapp", _setting(conn, "notify_whatsapp"), lambda to: send_whatsapp(mail, to, body)),
+        ("telegram", _setting(conn, "telegram_chat_id") if mail["telegram_token"] else None,
+         lambda to: send_telegram(mail["telegram_token"], to, body, card)),
     ):
         if not address:
             continue
@@ -147,7 +222,10 @@ def after_check(conn, mail, hunt, listing, points):
         store = catalog.RETAILER_LABELS.get(listing["retailer"], listing["retailer"])
         subject = f"{RULES[rule]}: {listing['title'][:70]}"
         body = f"{RULES[rule]}: {detail}\n{listing['title']}\n{store} · hunt “{hunt['name']}”\n{listing['url']}"
-        reached, problems = deliver(conn, mail, subject, body)
+        # The same alert in parts, for the channels that can lay it out (Discord, Telegram).
+        card = {"rule": rule, "detail": detail, "price": points[-1]["price_inr"], "title": listing["title"],
+                "url": listing["url"], "image": listing["image_url"], "store": store, "hunt": hunt["name"]}
+        reached, problems = deliver(conn, mail, subject, body, card=card)
         conn.execute(
             "INSERT INTO alerts (hunt_id, listing_id, rule, channel, price_inr, message, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (hunt["id"], listing["id"], rule, ", ".join(reached), points[-1]["price_inr"],
@@ -156,6 +234,26 @@ def after_check(conn, mail, hunt, listing, points):
         conn.commit()
         raised += 1
     return raised
+
+
+def new_matches(conn, mail, hunt, found):
+    """Raise one alert for the listings a scheduled search added that meet the hunt. `found` is cheapest first."""
+    best, count = found[0], len(found)
+    store = catalog.RETAILER_LABELS.get(best["retailer"], best["retailer"])
+    detail = ("A new listing that meets this hunt." if count == 1 else
+              f"The cheapest of {count} new listings that meet this hunt. Open the hunt to review them all.")
+    subject = f"{count} new listing{'' if count == 1 else 's'} for “{hunt['name']}”"
+    lines = [f"{price_text(item['price_inr'])} · {catalog.RETAILER_LABELS.get(item['retailer'], item['retailer'])}\n"
+             f"{item['title']}\n{item['url']}" for item in found[:10]]
+    card = {"rule": "new_match", "detail": detail, "price": best["price_inr"], "title": best["title"],
+            "url": best["url"], "image": best["image_url"], "store": store, "hunt": hunt["name"]}
+    reached, problems = deliver(conn, mail, subject, subject + "\n\n" + "\n\n".join(lines), card=card)
+    conn.execute(
+        "INSERT INTO alerts (hunt_id, listing_id, rule, channel, price_inr, message, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (hunt["id"], best["id"], "new_match", ", ".join(reached), best["price_inr"],
+         json.dumps({"detail": detail, "problems": problems}, ensure_ascii=False), now()),
+    )
+    conn.commit()
 
 
 def recent(conn, limit=30):

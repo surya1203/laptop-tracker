@@ -21,6 +21,10 @@ ADDED_COLUMNS = [
     ("hunts", "alert_back_in_stock", "INTEGER NOT NULL DEFAULT 1"),
     ("hunts", "alert_target_inr", "INTEGER"),
     ("hunts", "alert_drop_pct", "INTEGER"),
+    ("hunts", "alert_new_match", "INTEGER NOT NULL DEFAULT 1"),
+    ("price_points", "source", "TEXT"),
+    ("listings", "history_checked_at", "TEXT"),
+    ("listings", "history_note", "TEXT"),
 ]
 
 

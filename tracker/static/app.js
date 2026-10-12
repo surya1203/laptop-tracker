@@ -117,3 +117,158 @@ if (form) {
     syncGpu(false);
     syncChips();
 }
+
+// Tracked page: a listing's small chart opens its full price history. The tracker's own checks and the
+// earlier prices imported from BuyHatke are two separate lines; clicking one in the legend hides it.
+const historyDialog = document.getElementById('history-dialog');
+if (historyDialog) {
+    const part = (name) => historyDialog.querySelector(`[data-history-${name}]`);
+    const rupees = (amount) => '₹' + Number(amount).toLocaleString('en-IN');
+    const day = (ms, withYear = true) => new Date(ms).toLocaleDateString('en-IN',
+        { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}) });
+    const SERIES = [
+        { key: 'own', label: 'This tracker', light: '#059669', dark: '#199e70', dash: [] },
+        { key: 'imported', label: 'BuyHatke, before tracking began', light: '#2a78d6', dark: '#3987e5', dash: [6, 4] },
+    ];
+    let chart = null;
+    let loaded = null;
+    let days = 0;
+
+    // A vertical line under the pointer, so the date being read is unmistakable.
+    const crosshair = {
+        id: 'crosshair',
+        afterDatasetsDraw(c) {
+            const active = c.tooltip && c.tooltip.getActiveElements();
+            if (!active || !active.length) return;
+            const { ctx, chartArea } = c;
+            ctx.save();
+            ctx.strokeStyle = c.options.scales.x.grid.color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(active[0].element.x, chartArea.top);
+            ctx.lineTo(active[0].element.x, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+        },
+    };
+
+    function draw() {
+        const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+        const ink = dark ? '#94a3b8' : '#64748b';
+        const grid = dark ? '#1e293b' : '#e2e8f0';
+        const from = days ? Date.now() - days * 86400000 : 0;
+        const shown = SERIES.map((series) => ({ ...series, points: loaded[series.key].filter((p) => p.x >= from) }))
+            .filter((series) => series.points.length);
+        const all = shown.flatMap((series) => series.points.map((p) => ({ ...p, by: series.label })));
+
+        if (all.length) {
+            const low = all.reduce((a, b) => (b.y < a.y ? b : a));
+            const high = all.reduce((a, b) => (b.y > a.y ? b : a));
+            part('stats').textContent = `Lowest ${rupees(low.y)} on ${day(low.x)} · highest ${rupees(high.y)} on ${day(high.x)}`;
+        } else {
+            part('stats').textContent = 'No prices in this period.';
+        }
+
+        // The table lists changes only: a row each time the price differs from the one before it.
+        const rows = [];
+        all.sort((a, b) => a.x - b.x).forEach((p, i, list) => {
+            if (i === 0 || list[i - 1].y !== p.y) rows.push(p);
+        });
+        part('table').replaceChildren(...rows.reverse().map((p) => {
+            const row = document.createElement('tr');
+            [day(p.x), rupees(p.y), p.by].forEach((text) => {
+                const cell = document.createElement('td');
+                cell.className = 'py-0.5 pr-3';
+                cell.textContent = text;
+                row.append(cell);
+            });
+            return row;
+        }));
+
+        if (chart) chart.destroy();
+        const span = all.length ? all[all.length - 1].x - all[0].x : 0;
+        chart = new Chart(part('chart'), {
+            type: 'line',
+            data: {
+                datasets: shown.map((series) => ({
+                    label: series.label,
+                    data: series.points,
+                    borderColor: dark ? series.dark : series.light,
+                    backgroundColor: dark ? series.dark : series.light,
+                    borderWidth: 2,
+                    borderDash: series.dash,
+                    stepped: true,  // a price holds until the next time it was seen to change
+                    pointRadius: series.points.length <= 40 ? 3 : 0,
+                    pointHoverRadius: 5,
+                    pointHitRadius: 12,
+                })),
+            },
+            plugins: [crosshair],
+            options: {
+                maintainAspectRatio: false,
+                animation: false,
+                parsing: false,
+                interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        // Keep to the dates there are prices for, with a little air at each end.
+                        min: all.length ? all[0].x - span * 0.02 : undefined,
+                        max: all.length ? all[all.length - 1].x + span * 0.02 : undefined,
+                        grid: { color: grid, drawTicks: false },
+                        border: { display: false },
+                        ticks: { color: ink, maxTicksLimit: 7, maxRotation: 0, padding: 8,
+                                 includeBounds: false,
+                                 callback: (value) => day(value, span > 200 * 86400000) },
+                    },
+                    y: {
+                        grid: { color: grid, drawTicks: false },
+                        border: { display: false },
+                        ticks: { color: ink, padding: 8, maxTicksLimit: 6, callback: (value) => rupees(value) },
+                    },
+                },
+                plugins: {
+                    legend: { position: 'top', align: 'start',
+                              labels: { color: ink, usePointStyle: true, pointStyle: 'line', boxWidth: 28, padding: 16 } },
+                    tooltip: {
+                        displayColors: true,
+                        callbacks: {
+                            title: (items) => day(items[0].parsed.x),
+                            label: (item) => ` ${rupees(item.parsed.y)} · ${item.dataset.label}`,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    document.querySelectorAll('[data-history]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            part('title').textContent = 'Loading…';
+            historyDialog.showModal();
+            try {
+                const response = await fetch(button.dataset.history);
+                if (!response.ok) throw new Error(response.status);
+                loaded = await response.json();
+            } catch (error) {
+                part('title').textContent = 'The price history could not be loaded.';
+                return;
+            }
+            part('title').textContent = loaded.title;
+            part('store').textContent = loaded.store;
+            part('note').textContent = loaded.note || '';
+            draw();
+        });
+    });
+    historyDialog.querySelectorAll('[data-history-range]').forEach((button) => {
+        button.addEventListener('click', () => {
+            days = Number(button.dataset.historyRange);
+            historyDialog.querySelectorAll('[data-history-range]').forEach((other) =>
+                other.setAttribute('aria-pressed', String(other === button)));
+            if (loaded) draw();
+        });
+    });
+    part('close').addEventListener('click', () => historyDialog.close());
+    // A click on the dimmed area around the dialog closes it too.
+    historyDialog.addEventListener('click', (event) => { if (event.target === historyDialog) historyDialog.close(); });
+}

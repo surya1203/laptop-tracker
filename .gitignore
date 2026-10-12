@@ -11,3 +11,6 @@ tracker.db
 # Ignore Python cache files
 __pycache__/
 *.pyc
+
+# Ignore the app's log files
+*.log

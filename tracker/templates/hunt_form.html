@@ -204,7 +204,7 @@
     {% endcall %}
 
     {% call panel('Alerts') %}
-    <p class="muted text-sm sm:col-span-2">When a price check on a listing you track from this hunt finds one of these, you are told: in the app, and by email and WhatsApp if they are set up in Settings.</p>
+    <p class="muted text-sm sm:col-span-2">When a price check on a listing you track from this hunt finds one of these, or a search finds something new, you are told: in the app, and by Discord, email and Telegram if they are set up in Settings.</p>
     <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" name="alert_new_low" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600" {{ 'checked' if hunt.alert_new_low }}>
         A new all-time low
@@ -212,6 +212,10 @@
     <label class="flex items-center gap-2 text-sm">
         <input type="checkbox" name="alert_back_in_stock" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600" {{ 'checked' if hunt.alert_back_in_stock }}>
         Back in stock
+    </label>
+    <label class="flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="alert_new_match" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600" {{ 'checked' if hunt.alert_new_match }}>
+        A new listing that meets this hunt turns up (hunts are searched again on the schedule in Settings)
     </label>
     <div>
         <label class="label" for="f-alert_target_inr">Price at or under</label>

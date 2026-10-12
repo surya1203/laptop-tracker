@@ -6,14 +6,14 @@ Describe the laptop you want, preview what Indian stores have, pick the listings
 
 ## Status
 
-Built in five phases (see "Build order" in the plan). **Phases 1 to 4 are done, and the extra stores from phase 5 were brought forward: hunts are searched on eleven stores, tracked listings are re-checked on a schedule, and price alerts go to the Dashboard, email and WhatsApp.** Left: add-by-URL, the mobile pass, and the items under "Not built yet".
+Built in five phases (see "Build order" in the plan). **Phases 1 to 4 are done, and the extra stores from phase 5 were brought forward: hunts are searched on eleven stores, tracked listings are re-checked on a schedule, and price alerts go to the Dashboard, Discord, email and Telegram.** Left: add-by-URL, the mobile pass, and the items under "Not built yet".
 
 | Phase | What | State |
 | --- | --- | --- |
 | 1 | Project layout, database, design system, filter form, edit/pause/delete hunts | Done |
 | 2 | Search and preview, delivery check by PIN code | Done |
 | 3 | Price history, scheduler, Tracked page | Done |
-| 4 | Alerts (in-app feed, email, WhatsApp) | Done; "new match" rule not built |
+| 4 | Alerts (in-app feed, Discord, email, Telegram) | Done |
 | 5 | More stores (done early, Oct 11), add-by-URL, dashboard, mobile pass | Stores done; rest not started |
 
 ## Run it
@@ -68,16 +68,23 @@ Listings you tick in a hunt appear on the **Tracked** page. The same model found
 - **Schedule.** While the app is running, every tracked listing on an active hunt is re-checked every 1, 3, 6, 12 or 24 hours (Settings; default 6). The time of the last check is kept in the database, so restarting does not reset the clock; a check that became due while the app was closed runs about half a minute after it starts. **Check prices now** on the Tracked page runs one straight away. `SCHEDULER=0` in `.env` turns the automatic checks off.
 - **Lows** come from this tracker's own checks, so they start the day a listing was first found. A check that found the listing out of stock is recorded but never counts as a low.
 - **Paused hunts** are not checked and raise no alerts.
-- Scheduled checks re-read tracked listings only. Finding new listings still means pressing **Search now** on the hunt.
+- Scheduled checks re-read tracked listings only. Separately, every active hunt is searched again for new listings (once a day unless changed in Settings); what it finds waits in the hunt's review tabs, and listings that meet the hunt raise a "new match" alert.
+
+## Earlier prices
+
+The tracker's own history starts the day a listing is found. To judge a price against a longer past, each tracked listing is looked up once on BuyHatke, a price-history site that has followed most Indian stores for years, and whatever it recorded before tracking began is added to the listing's history. Those prices count towards the lows, are drawn as a separate dashed line in a listing's full price history (click its small chart on the Tracked page; the small chart shows the last 30 days in the same two colours), are marked with an asterisk on the Tracked page, and never raise an alert by being imported.
+
+BuyHatke has no published API; the tracker reads what its own pages load, slowly (two listings a minute at most). If it stops working, tracking carries on without earlier prices. Acer's store is not covered. When BuyHatke's price for a link is more than 15% from the store's own, the link probably covers several configurations and nothing is imported.
 
 ## Alerts
 
-Each hunt has an Alerts panel in its form with four rules: a new all-time low (on by default), back in stock (on by default), price at or under a target, and a fall of at least X% since the previous check. They apply to the listings tracked from that hunt.
+Each hunt has an Alerts panel in its form with five rules: a new all-time low (on by default), back in stock (on by default), price at or under a target, a fall of at least X% since the previous check, and a new listing that meets the hunt (on by default). The first four apply to the listings tracked from that hunt; the last fires when a scheduled search adds something.
 
-Every alert is listed on the Dashboard. To also get them by email or WhatsApp, fill in Settings > Alerts and press the test buttons:
+Every alert is listed on the Dashboard. To also get them on Discord, by email or on Telegram, fill in Settings > Alerts and press the test buttons:
 
+- **Discord** needs only a webhook link for the channel the alerts should post to (Edit Channel > Integrations > Webhooks). It is the quickest to set up.
 - **Email** needs a Gmail address to send from and an app password for it (Gmail refuses an app signing in with the normal password; the page links to where Google issues one). Alerts go to that same address unless you give another.
-- **WhatsApp** needs your number and a key from the free CallMeBot service (the page links to its steps).
+- **Telegram** uses Telegram's own bot service: create a bot with @BotFather, send it a message, and paste its token (the page lists the steps). The tracker finds the chat to write to by itself.
 
 These are kept in the tracker's database (`tracker.db`, which is not uploaded to GitHub), as plain text.
 
@@ -85,8 +92,7 @@ The same rule does not fire again for the same listing within 24 hours (changeab
 
 ## Not built yet
 
-- The "new match" alert (a new listing appearing for a hunt), which needs hunts to be re-searched on a schedule.
-- A full price-history chart per listing (the Tracked page has a sparkline), and deleting a listing with its history.
+- Deleting a listing with its history.
 - Telegram, add-by-URL, "Clear all tracking", and protection against forged form posts (keep `HOST` on 127.0.0.1 until that exists).
 
 ## Tests
@@ -115,9 +121,10 @@ tracker/
   matching.py       compares a listing's specs with a hunt's filters
   listings.py       found listings: storage, grouping, track / hide, the Tracked page's groups
   history.py        lows, change since the last check and the sparkline, from a listing's price points
+  backfill.py       one-time import of a tracked listing's earlier prices from BuyHatke
   checker.py        background re-check of every tracked listing
   scheduler.py      starts a check when the chosen interval has passed
-  alerts.py         alert rules, cooldown, quiet hours, email and WhatsApp sending, the feed
+  alerts.py         alert rules, cooldown, quiet hours, Discord, email and Telegram sending, the feed
   migrate.py        one-time import of saved searches from the old database
   routes.py         pages and form handlers
   templates/        Jinja pages (Tailwind, HTMX)

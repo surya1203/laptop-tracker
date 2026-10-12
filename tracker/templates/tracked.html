@@ -99,16 +99,32 @@
                         <dd class="tabular-nums">{{ l.above_low_inr|inr }}</dd>
                     </div>
                     {% endif %}
+                    {% if l.since_at %}
+                    <div class="flex justify-between gap-3" {% if l.history_note %}title="{{ l.history_note }}"{% endif %}>
+                        <dt class="muted">Prices since</dt>
+                        <dd class="tabular-nums">{{ l.since_at|shortdate }}{{ '*' if l.imported }}</dd>
+                    </div>
+                    {% endif %}
                 </dl>
                 <div class="w-[120px]">
-                    {% if l.spark %}
-                    <svg viewBox="0 0 120 28" class="h-7 w-[120px]" role="img" aria-label="Price over time">
-                        <polyline points="{{ l.spark }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
-                                  class="{{ 'text-emerald-500' if (l.change_inr or 0) <= 0 else 'text-red-500' }}"></polyline>
-                    </svg>
-                    {% else %}
-                    <p class="muted text-xs">Chart after the next check</p>
-                    {% endif %}
+                    <button type="button" data-history="{{ url_for('main.tracked_history', listing_id=l.id) }}"
+                            class="group block w-full rounded-lg p-1 text-left hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:hover:bg-slate-800"
+                            aria-label="Open the price history of {{ l.title }}">
+                        {% if l.spark %}
+                        {# The same two colours as the full chart: this tracker green, BuyHatke blue and dashed. #}
+                        <svg viewBox="0 0 120 28" class="h-7 w-full" role="img" aria-label="Price over the last 30 days">
+                            {% if l.spark.imported %}
+                            <polyline points="{{ l.spark.imported }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="3 2"
+                                      class="text-[#2a78d6] dark:text-[#3987e5]"></polyline>
+                            {% endif %}
+                            {% if l.spark.own %}
+                            <polyline points="{{ l.spark.own }}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"
+                                      class="text-[#059669] dark:text-[#199e70]"></polyline>
+                            {% endif %}
+                        </svg>
+                        {% endif %}
+                        <span class="muted block text-xs group-hover:underline">{{ 'Last 30 days ⤢' if l.spark else 'Price history ⤢' if l.imported else 'Chart after the next check' }}</span>
+                    </button>
                 </div>
                 <div class="flex items-center gap-2">
                     <a class="btn btn-secondary" href="{{ l.url }}" target="_blank" rel="noopener noreferrer">View on {{ store }} ↗</a>
@@ -123,6 +139,38 @@
     {% endfor %}
 </div>
 {% if count %}
-<p class="muted mt-4 text-xs">Lows are worked out from this tracker's own checks, so they start from the day a listing was first found. Out-of-stock checks never count as a low.</p>
+<dialog id="history-dialog" class="card w-[min(56rem,calc(100vw-2rem))] p-0 text-slate-900 backdrop:bg-slate-950/60 dark:text-slate-100">
+    <div class="p-5">
+        <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+                <p class="muted text-xs" data-history-store></p>
+                <h2 class="line-clamp-2 text-sm font-semibold" data-history-title>Price history</h2>
+            </div>
+            <button type="button" class="btn btn-secondary" data-history-close>Close</button>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex gap-1" role="group" aria-label="Period shown">
+                {% for days, label in ((30, '1 month'), (90, '3 months'), (365, '1 year'), (0, 'All')) %}
+                <button type="button" class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium aria-pressed:border-emerald-600 aria-pressed:bg-emerald-600 aria-pressed:text-white dark:border-slate-700"
+                        data-history-range="{{ days }}" aria-pressed="{{ 'true' if days == 0 else 'false' }}">{{ label }}</button>
+                {% endfor %}
+            </div>
+            <p class="muted text-xs tabular-nums" data-history-stats></p>
+        </div>
+        <div class="relative mt-3 h-72 sm:h-80"><canvas data-history-chart aria-label="Price over time" role="img"></canvas></div>
+        <p class="muted mt-2 text-xs" data-history-note></p>
+        <details class="mt-3 text-xs">
+            <summary class="muted cursor-pointer hover:underline">Show the price changes as a table</summary>
+            <div class="mt-2 max-h-56 overflow-y-auto">
+                <table class="w-full tabular-nums">
+                    <thead class="muted text-left"><tr><th class="py-1 font-medium">Date</th><th class="font-medium">Price</th><th class="font-medium">Recorded by</th></tr></thead>
+                    <tbody data-history-table></tbody>
+                </table>
+            </div>
+        </details>
+    </div>
+</dialog>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+<p class="muted mt-4 text-xs">Each small chart is the last 30 days: this tracker's checks in green, BuyHatke's earlier prices in dashed blue. Click it for the full price history. Lows are worked out from this tracker's own checks, plus earlier prices where they could be found. * Prices from before tracking began come from BuyHatke, looked up once when a listing is tracked; hover over the date for details. Out-of-stock checks never count as a low.</p>
 {% endif %}
 {% endblock %}

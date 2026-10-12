@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS hunts (
     alert_new_low       INTEGER NOT NULL DEFAULT 1,
     alert_back_in_stock INTEGER NOT NULL DEFAULT 1,
     alert_target_inr    INTEGER,  -- alert at or under this price
-    alert_drop_pct      INTEGER   -- alert on a fall of at least this % since the last check
+    alert_drop_pct      INTEGER,  -- alert on a fall of at least this % since the last check
+    alert_new_match     INTEGER NOT NULL DEFAULT 1  -- alert when a scheduled search adds a listing that matches
 );
 
 -- One product page found at one retailer.
@@ -54,6 +55,9 @@ CREATE TABLE IF NOT EXISTS listings (
     deliverable      INTEGER,
     delivery_note    TEXT,
     delivery_pincode TEXT,
+    -- Earlier prices are looked up once per tracked listing (see backfill.py): when, and what came of it.
+    history_checked_at TEXT,
+    history_note       TEXT,
     UNIQUE (hunt_id, url)
 );
 
@@ -64,7 +68,8 @@ CREATE TABLE IF NOT EXISTS price_points (
     price_inr  INTEGER,
     mrp_inr    INTEGER,
     in_stock   INTEGER NOT NULL DEFAULT 1,
-    checked_at TEXT NOT NULL
+    checked_at TEXT NOT NULL,
+    source     TEXT  -- NULL = the tracker's own check; otherwise where an earlier price was imported from
 );
 CREATE INDEX IF NOT EXISTS idx_price_points_listing ON price_points (listing_id, checked_at);
 

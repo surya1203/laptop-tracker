@@ -3,9 +3,9 @@ import json
 import re
 from datetime import datetime, timezone
 
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
-from . import alerts, checker, hunts, listings, scheduler, search
+from . import alerts, catalog, checker, hunts, listings, scheduler, search
 from .db import get_db, get_setting, set_setting
 
 TABS = ("match", "near", "miss", "tracked")
@@ -28,7 +28,11 @@ def _schedule():
     except ValueError:
         result = {}
     due = scheduler.next_check(db)
+    search_due = scheduler.next_search(db)
     return {
+        "search_interval": scheduler.search_interval_hours(db),
+        "last_search_at": scheduler.last_search(db),
+        "next_search_at": max(search_due, datetime.now(timezone.utc)).isoformat(timespec="seconds") if search_due else None,
         "interval": scheduler.interval_hours(db),
         "last_at": get_setting("last_check_at"),
         "result": result,
@@ -219,6 +223,25 @@ def tracked_check_progress():
     return render_template("_check_progress.html", run=checker.RUN)
 
 
+@bp.route("/tracked/<int:listing_id>/history")
+def tracked_history(listing_id):
+    """A listing's prices for the full chart, as two series: the tracker's own checks and imported earlier prices."""
+    db = get_db()
+    row = db.execute(
+        "SELECT l.title, l.retailer, l.history_note FROM listings l JOIN hunts h ON h.id = l.hunt_id "
+        "WHERE l.id = ? AND h.deleted_at IS NULL", (listing_id,),
+    ).fetchone()
+    if not row:
+        abort(404)
+    series = {"own": [], "imported": []}
+    for point in listings.points(db, listing_id):
+        if point["price_inr"] and point["in_stock"]:
+            moment = datetime.fromisoformat(point["checked_at"])
+            series["imported" if point["source"] else "own"].append({"x": int(moment.timestamp() * 1000), "y": point["price_inr"]})
+    return jsonify(title=row["title"], store=catalog.RETAILER_LABELS.get(row["retailer"], row["retailer"]),
+                   note=row["history_note"], **series)
+
+
 @bp.route("/tracked/<int:listing_id>/untrack", methods=["POST"])
 def tracked_untrack(listing_id):
     row = get_db().execute("SELECT hunt_id FROM listings WHERE id = ?", (listing_id,)).fetchone()
@@ -233,8 +256,9 @@ def _settings_page(error=None, status=200, **typed):
     mail = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])
     return render_template(
         "settings.html", settings={**{row["key"]: row["value"] for row in rows}, **typed}, error=error,
-        schedule=_schedule(), intervals=scheduler.INTERVALS, sender=mail["sender"],
-        password_saved=bool(mail["password"]), key_saved=bool(mail["callmebot_key"]),
+        schedule=_schedule(), intervals=scheduler.INTERVALS, search_choices=scheduler.SEARCH_CHOICES, sender=mail["sender"],
+        password_saved=bool(mail["password"]), token_saved=bool(mail["telegram_token"]),
+        webhook_saved=bool(mail["discord_webhook"]),
         cooldown=alerts.DEFAULT_COOLDOWN_HOURS,
     ), status
 
@@ -247,30 +271,38 @@ def settings():
 @bp.route("/settings/checks", methods=["POST"])
 def settings_checks():
     hours = request.form.get("check_interval_hours", type=int)
-    if hours not in scheduler.INTERVALS:
+    search_hours = request.form.get("search_interval_hours", type=int)
+    if hours not in scheduler.INTERVALS or search_hours not in dict(scheduler.SEARCH_CHOICES):
         abort(400)
     set_setting("check_interval_hours", str(hours))
-    flash(f"Prices will be checked every {hours} hour{'' if hours == 1 else 's'}.")
+    set_setting("search_interval_hours", str(search_hours))
+    flash(f"Prices will be checked every {hours} hour{'' if hours == 1 else 's'}; "
+          f"new listings are looked for: {dict(scheduler.SEARCH_CHOICES)[search_hours].lower()}.")
     return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/alerts", methods=["POST"])
 def settings_alerts():
     form = {key: " ".join(request.form.get(key, "").split()) for key in
-            ("sender_email", "notify_email", "notify_whatsapp", "quiet_start", "quiet_end", "alert_cooldown_hours")}
+            ("sender_email", "notify_email", "telegram_chat_id", "quiet_start", "quiet_end", "alert_cooldown_hours")}
     # Secrets are never shown back in the form, so an empty box means "keep what is saved".
-    secrets = {key: "".join(request.form.get(key, "").split()) for key in ("gmail_app_password", "callmebot_api_key")}
-    form["notify_whatsapp"] = re.sub(r"[\s-]", "", form["notify_whatsapp"])
+    secrets = {key: "".join(request.form.get(key, "").split()) for key in
+               ("gmail_app_password", "telegram_bot_token", "discord_webhook_url")}
     problem = None
     email = r"[^@\s]+@[^@\s]+\.[^@\s]+"
     if form["sender_email"] and not re.fullmatch(email, form["sender_email"]):
         problem = "The address to send from does not look right."
     elif secrets["gmail_app_password"] and not re.fullmatch(r"[A-Za-z]{16}", secrets["gmail_app_password"]):
         problem = "A Gmail app password is 16 letters (Google shows it in four groups of four). It is not your normal Gmail password."
+    elif secrets["discord_webhook_url"] and not re.fullmatch(
+            r"https://(\w+\.)?discord(app)?\.com/api/webhooks/\d+/[\w-]+", secrets["discord_webhook_url"]):
+        problem = "A Discord webhook link looks like https://discord.com/api/webhooks/1234…/abc…"
     elif form["notify_email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", form["notify_email"]):
         problem = "That email address does not look right."
-    elif form["notify_whatsapp"] and not re.fullmatch(r"\+\d{10,15}", form["notify_whatsapp"]):
-        problem = "Give the WhatsApp number with its country code, like +919876543210."
+    elif secrets["telegram_bot_token"] and not re.fullmatch(r"\d+:[\w-]{30,}", secrets["telegram_bot_token"]):
+        problem = "A Telegram bot token looks like 123456789:AAH… Copy the whole line BotFather gave you."
+    elif form["telegram_chat_id"] and not re.fullmatch(r"-?\d+", form["telegram_chat_id"]):
+        problem = "A Telegram chat ID is a number. Leave it blank and the tracker finds it for you."
     elif bool(form["quiet_start"]) != bool(form["quiet_end"]):
         problem = "Quiet hours need both a start and an end time, or neither."
     elif any(value and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) for value in (form["quiet_start"], form["quiet_end"])):
@@ -285,24 +317,38 @@ def settings_alerts():
         if value:
             set_setting(key, value)
     flash("Alert settings saved.")
+    token = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])["telegram_token"]
+    if token and not form["telegram_chat_id"]:
+        # Telegram only lets a bot write to someone who has written to it first; that message tells us the chat.
+        try:
+            chat = alerts.telegram_chat(token)
+        except Exception as error:
+            flash(f"Telegram: {str(error).splitlines()[0][:200]}", "error")
+        else:
+            if chat:
+                set_setting("telegram_chat_id", chat)
+                flash("Found your Telegram chat. Press Send test Telegram to try it.")
+            else:
+                flash("Telegram: open your bot in Telegram, send it any message, then press Save again.", "error")
     return redirect(url_for("main.settings"))
 
 
-@bp.route("/settings/test/<any(email, whatsapp):channel>", methods=["POST"])
+@bp.route("/settings/test/<any(discord, email, telegram):channel>", methods=["POST"])
 def settings_test(channel):
     mail = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])
     body = "This is a test alert from Laptop Tracker. If you can read it, this channel works."
     try:
-        if channel == "email":
+        if channel == "discord":
+            address = "Discord"
+            alerts.send_discord(mail["discord_webhook"], body)
+        elif channel == "email":
             address = get_setting("notify_email") or mail["sender"]
             if not address:
                 raise RuntimeError("Save an email address first.")
             alerts.send_email(mail, address, "Laptop Tracker test alert", body)
         else:
-            address = get_setting("notify_whatsapp")
-            if not address:
-                raise RuntimeError("Save a WhatsApp number first.")
-            alerts.send_whatsapp(mail, address, body)
+            address = "Telegram"
+            alerts.send_telegram(mail["telegram_token"], get_setting("telegram_chat_id"), body)
     except Exception as error:
         flash(f"Test not sent: {str(error).splitlines()[0][:200]}", "error")
     else:
