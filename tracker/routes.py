@@ -276,6 +276,7 @@ def settings_checks():
         abort(400)
     set_setting("check_interval_hours", str(hours))
     set_setting("search_interval_hours", str(search_hours))
+    set_setting("status_updates", "1" if request.form.get("status_updates") else "0")
     flash(f"Prices will be checked every {hours} hour{'' if hours == 1 else 's'}; "
           f"new listings are looked for: {dict(scheduler.SEARCH_CHOICES)[search_hours].lower()}.")
     return redirect(url_for("main.settings"))
@@ -336,7 +337,7 @@ def settings_alerts():
 @bp.route("/settings/test/<any(discord, email, telegram):channel>", methods=["POST"])
 def settings_test(channel):
     mail = alerts.credentials(get_db(), scheduler.check_options(current_app.config)["mail"])
-    body = "This is a test alert from Laptop Tracker. If you can read it, this channel works."
+    body = "This is a test alert from PC Tracker. If you can read it, this channel works."
     try:
         if channel == "discord":
             address = "Discord"
@@ -345,7 +346,7 @@ def settings_test(channel):
             address = get_setting("notify_email") or mail["sender"]
             if not address:
                 raise RuntimeError("Save an email address first.")
-            alerts.send_email(mail, address, "Laptop Tracker test alert", body)
+            alerts.send_email(mail, address, "PC Tracker test alert", body)
         else:
             address = "Telegram"
             alerts.send_telegram(mail["telegram_token"], get_setting("telegram_chat_id"), body)

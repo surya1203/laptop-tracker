@@ -118,7 +118,20 @@ def send_discord(webhook, body, card=None):
     if not webhook:
         raise RuntimeError("Paste a Discord webhook link in Settings first.")
     payload = {"content": body[:2000]}
-    if card:
+    if card and "lines" in card:
+        shown, length = [], 0
+        for line in card["lines"]:
+            entry = f"**[{_link_text(line['title'])}]({line['url']})**\n{line['store']} · {line['text']}"
+            if length + len(entry) > 3800:  # Discord allows 4096 characters
+                shown.append(f"…and {len(card['lines']) - len(shown)} more on the Tracked page.")
+                break
+            shown.append(entry)
+            length += len(entry) + 2
+        payload = {"content": f"**{card['headline'][:1900]}**", "embeds": [{
+            "author": {"name": "Tracked laptops"}, "description": "\n\n".join(shown),
+            "color": COLOURS["new_low"] if card["news"] else 0x64748B, "footer": {"text": "PC Tracker"},
+        }]}
+    elif card:
         embed = {
             "author": {"name": RULES[card["rule"]]},
             "title": card["title"][:250], "url": card["url"],
@@ -126,7 +139,7 @@ def send_discord(webhook, body, card=None):
             "color": COLOURS.get(card["rule"], 0x64748B),
             "fields": [{"name": "Store", "value": card["store"], "inline": True},
                        {"name": "Hunt", "value": card["hunt"][:200], "inline": True}],
-            "footer": {"text": "Laptop Tracker"},
+            "footer": {"text": "PC Tracker"},
         }
         if (card.get("image") or "").startswith("http"):
             embed["thumbnail"] = {"url": card["image"]}
@@ -135,7 +148,7 @@ def send_discord(webhook, body, card=None):
     request = urllib.request.Request(
         webhook, data=json.dumps(payload).encode("utf-8"),
         # Discord turns away Python's default User-Agent.
-        headers={"Content-Type": "application/json", "User-Agent": "LaptopTracker/1.0"},
+        headers={"Content-Type": "application/json", "User-Agent": "PCTracker/1.0"},
     )
     try:
         urllib.request.urlopen(request, timeout=30).close()
@@ -143,6 +156,11 @@ def send_discord(webhook, body, card=None):
         gone = error.code in (401, 404)
         raise RuntimeError("Discord no longer knows this webhook. Create a new one and paste its link in Settings."
                            if gone else f"Discord answered {error.code}.") from error
+
+
+def _link_text(title):
+    """A listing title that is safe inside a Discord [link](…)."""
+    return title[:80].replace("[", "(").replace("]", ")")
 
 
 def _telegram(token, method, data=None):
@@ -177,8 +195,12 @@ def send_telegram(token, chat, body, card=None):
     if not chat:
         raise RuntimeError("Send your bot a message in Telegram, then press Save so the tracker can find the chat.")
     message = {"chat_id": chat, "text": body[:4096], "disable_web_page_preview": "true"}
-    if card:
-        e = html.escape
+    e = html.escape
+    if card and "lines" in card:
+        lines = [f"<a href=\"{e(line['url'])}\">{e(line['title'][:80])}</a>\n{e(line['store'])} · {e(line['text'])}"
+                 for line in card["lines"][:20]]
+        message.update(parse_mode="HTML", text=f"<b>{e(card['headline'])}</b>\n\n" + "\n\n".join(lines))
+    elif card:
         message.update(parse_mode="HTML", text=(
             f"<b>{e(RULES[card['rule']])}: {price_text(card['price'])}</b>\n{e(card['detail'])}\n\n"
             f"<a href=\"{e(card['url'])}\">{e(card['title'][:250])}</a>\n{e(card['store'])} · hunt “{e(card['hunt'])}”"))
@@ -254,6 +276,58 @@ def new_matches(conn, mail, hunt, found):
          json.dumps({"detail": detail, "problems": problems}, ensure_ascii=False), now()),
     )
     conn.commit()
+
+
+def update_headline(news, items, since):
+    """The title of a regular update: what was found if anything was, else how many prices moved."""
+    if len(news) == 1:
+        return f"{RULES[news[0]['rule']]}: {price_text(news[0]['price_inr'])} · {(news[0]['title'] or '')[:60]}"
+    if news:
+        counts = {}
+        for alert in news:
+            counts[RULES[alert["rule"]]] = counts.get(RULES[alert["rule"]], 0) + 1
+        return ", ".join(label if count == 1 else f"{label} ×{count}" for label, count in counts.items())
+    moved = sum(1 for item in items if item["change_inr"] and (item["checked_at"] or "") >= since)
+    total = f"{len(items)} tracked laptop{'' if len(items) == 1 else 's'}"
+    return f"{total}: {moved} price{'' if moved == 1 else 's'} changed" if moved else f"{total}: no price change"
+
+
+def update_line(item, since):
+    """One tracked listing in a regular update: its price, how that moved at the last check, and its low."""
+    parts = [price_text(item["price_inr"])]
+    if (item["checked_at"] or "") < since:
+        parts.append("not read this time")
+    elif not item["in_stock"]:
+        parts.append("out of stock")
+    elif item["change_inr"]:
+        parts.append(f"{'▼' if item['change_inr'] < 0 else '▲'} {rupees(abs(item['change_inr']))} since the last check")
+    else:
+        parts.append("no change")
+    if item["at_low"]:
+        parts.append("its lowest so far")
+    elif item["low_inr"] and item["low_inr"] != item["price_inr"]:
+        parts.append(f"lowest {rupees(item['low_inr'])}")
+    return " · ".join(parts)
+
+
+def status_update(conn, mail, items, since, news_since=None):
+    """Send where every tracked listing stands after a scheduled check that began at `since`.
+
+    The title leads with any alert raised since `news_since` (the last update, so a new match found
+    between two checks is not missed); otherwise it is a plain update. It is sent, not written to the
+    feed. Returns (headline, channels reached, problems).
+    """
+    marks = ", ".join("?" * len(COLOURS))
+    news = conn.execute(
+        f"SELECT a.rule, a.price_inr, l.title FROM alerts a LEFT JOIN listings l ON l.id = a.listing_id "
+        f"WHERE a.sent_at >= ? AND a.rule IN ({marks}) ORDER BY a.id", (min(since, news_since or since), *COLOURS),
+    ).fetchall()
+    headline = update_headline(news, items, since)
+    lines = [{"title": item["title"], "url": item["url"], "text": update_line(item, since),
+              "store": catalog.RETAILER_LABELS.get(item["retailer"], item["retailer"])} for item in items]
+    body = headline + "\n\n" + "\n\n".join(f"{line['title']}\n{line['store']} · {line['text']}\n{line['url']}" for line in lines)
+    reached, problems = deliver(conn, mail, headline, body, card={"headline": headline, "lines": lines, "news": bool(news)})
+    return headline, reached, problems
 
 
 def recent(conn, limit=30):

@@ -1,4 +1,5 @@
 """Price history, alert rules, quiet hours and the check schedule."""
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -144,6 +145,54 @@ def test_new_matches_raise_one_alert_led_by_the_cheapest(monkeypatch):
     assert "Laptop B" in body and "Price not shown" in body
     row = conn.execute("SELECT * FROM alerts").fetchone()
     assert (row["listing_id"], row["rule"], row["channel"]) == (7, "new_match", "feed, discord")
+
+
+def _item(**changes):
+    item = {"title": "Laptop [A]", "url": "https://x.test/a", "retailer": "croma", "price_inr": 200000, "in_stock": True,
+            "checked_at": "2026-10-12T09:01:00+00:00", "change_inr": 0, "at_low": False, "low_inr": 190000}
+    item.update(changes)
+    return item
+
+
+def test_a_regular_update_lists_every_tracked_listing_and_its_title_leads_with_any_news(monkeypatch):
+    sent = []
+    monkeypatch.setattr(alerts, "send_discord", lambda webhook, body, card=None: sent.append((body, card)))
+    conn = _settings(discord_webhook_url="https://discord.com/api/webhooks/1/abc")
+    conn.execute("CREATE TABLE alerts (id INTEGER PRIMARY KEY, hunt_id, listing_id, rule, channel, price_inr, message, sent_at)")
+    conn.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, title)")
+    conn.execute("INSERT INTO listings VALUES (7, 'Laptop B')")
+    since = "2026-10-12T09:00:00+00:00"
+    items = [_item(), _item(title="Laptop B", change_inr=-5000, price_inr=185000, at_low=True),
+             _item(title="Laptop C", checked_at="2026-10-12T06:00:00+00:00", change_inr=-900)]
+    headline, reached, problems = alerts.status_update(conn, {}, items, since)
+    assert (headline, reached, problems) == ("3 tracked laptops: 1 price changed", ["feed", "discord"], [])
+    texts = [line["text"] for line in sent[0][1]["lines"]]
+    assert texts == ["₹2,00,000 · no change · lowest ₹1,90,000", "₹1,85,000 · ▼ ₹5,000 since the last check · its lowest so far",
+                     "₹2,00,000 · not read this time · lowest ₹1,90,000"]
+    assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 0  # an update is not an alert
+    # An alert raised during the round takes over the title; one from before it does not.
+    conn.execute("INSERT INTO alerts (listing_id, rule, price_inr, sent_at) VALUES (7, 'new_low', 185000, '2026-10-12T09:02:00+00:00')")
+    conn.execute("INSERT INTO alerts (listing_id, rule, price_inr, sent_at) VALUES (7, 'drop', 190000, '2026-10-12T03:00:00+00:00')")
+    assert alerts.status_update(conn, {}, items, since)[0] == "New all-time low: ₹1,85,000 · Laptop B"
+    conn.execute("INSERT INTO alerts (listing_id, rule, price_inr, sent_at) VALUES (7, 'new_match', 150000, '2026-10-12T09:20:00+00:00')")
+    assert alerts.status_update(conn, {}, items, since)[0] == "New all-time low, New match"
+    assert alerts.update_headline([], [_item()], since) == "1 tracked laptop: no price change"
+    assert alerts.update_line(_item(in_stock=False, low_inr=200000), since) == "₹2,00,000 · out of stock"
+
+
+def test_discord_lays_an_update_out_as_one_linked_entry_per_listing(monkeypatch):
+    posted = []
+
+    class Answer:
+        def close(self):
+            pass
+    monkeypatch.setattr(alerts.urllib.request, "urlopen", lambda request, timeout: posted.append(json.loads(request.data)) or Answer())
+    lines = [{"title": "Laptop [A]", "url": "https://x.test/a", "store": "Croma", "text": "₹2,00,000 · no change"}] * 60
+    alerts.send_discord("https://discord.com/api/webhooks/1/abc", "plain", {"headline": "60 tracked laptops: no price change", "lines": lines, "news": False})
+    embed = posted[0]["embeds"][0]
+    assert posted[0]["content"] == "**60 tracked laptops: no price change**"
+    assert embed["description"].startswith("**[Laptop (A)](https://x.test/a)**\nCroma · ₹2,00,000 · no change")
+    assert len(embed["description"]) <= 4096 and "more on the Tracked page" in embed["description"]
 
 
 BUYHATKE_STORES = {"www.croma": [{".com": [{"pos": 71, "config": {"pidRegex": ["\\/p\\/(\\d+)"]}}]}],

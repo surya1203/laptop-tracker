@@ -1,4 +1,4 @@
-# Laptop Tracker
+# PC Tracker
 
 Describe the laptop you want, preview what Indian stores have, pick the listings to track, and get told when one hits a new low. The full design is in [PLAN.md](PLAN.md).
 

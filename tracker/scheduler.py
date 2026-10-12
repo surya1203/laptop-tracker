@@ -1,7 +1,8 @@
 """Runs the price check, and the search for new listings, on a schedule while the app is open.
 
 A background thread wakes up every half minute and starts a check once the
-interval chosen in Settings has passed since the last one. The time of the last
+interval chosen in Settings has passed since the last one. If asked to, it then
+sends an update on every tracked listing, changed or not. The time of the last
 check is kept in the database, so a restart does not reset the clock. Active
 hunts are searched again on a slower schedule of their own, one hunt at a time.
 """
@@ -88,6 +89,19 @@ def search_hunts(app, options):
         set_setting("last_search_at", now())
 
 
+def send_update(app, options, since):
+    """After a scheduled round that began at `since`, send where every tracked listing stands, if that is switched on."""
+    with app.app_context():
+        if get_setting("status_updates") != "1":
+            return
+        items = [listing for group in listings.tracked() for listing in group["listings"] if listing["hunt_status"] == "active"]
+        if items:
+            _, _, problems = alerts.status_update(get_db(), options["mail"], items, since, get_setting("last_update_at"))
+            set_setting("last_update_at", now())
+            for problem in problems:
+                app.logger.warning("Update after the check: %s", problem)
+
+
 def check_options(config):
     return {
         "database": config["DATABASE_PATH"], "channel": config["BROWSER_CHANNEL"], "headless": config["BROWSER_HEADLESS"],
@@ -107,11 +121,14 @@ def _loop(app):
                 search_at = next_search(conn)
             finally:
                 conn.close()
-            if due and not checker.RUN["running"]:
-                checker.run(options)
+            began = now()
+            checked = due and not checker.RUN["running"] and checker.run(options)
             # Searches come after the check, never alongside it: both drive several browsers.
             if search_at and search_at <= datetime.now(timezone.utc) and not checker.RUN["running"]:
                 search_hunts(app, options)
+            # The update waits for the search, so its title can name new listings as well as new lows.
+            if checked:
+                send_update(app, options, began)
         except Exception as error:  # the schedule must survive one bad round
             app.logger.warning("Scheduled price check or search failed: %s", error)
         try:

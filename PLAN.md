@@ -1,4 +1,4 @@
-# Laptop Tracker: Rebuild Plan
+# PC Tracker: Rebuild Plan
 
 Oct 10, 2026 · Surya Giri
 

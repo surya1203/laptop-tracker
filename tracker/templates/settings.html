@@ -44,6 +44,11 @@
                 </select>
             </div>
             <button class="btn btn-primary">Save</button>
+            <label class="flex basis-full items-center gap-2 text-sm">
+                <input type="checkbox" name="status_updates" value="1" class="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+                       {{ 'checked' if settings.get('status_updates') == '1' }}>
+                Send me an update on every tracked listing after each scheduled check, even when nothing has changed
+            </label>
         </form>
         <dl class="mt-4 space-y-2 text-sm">
             <div class="flex justify-between gap-4">
