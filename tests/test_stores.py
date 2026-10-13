@@ -217,8 +217,49 @@ def test_apples_store_sells_the_mac_mini_and_mac_studio_as_towers():
     assert apple._name("https://www.apple.com/in/shop/buy-mac/mac-mini/m6-chip-12-core-cpu-12-core-gpu-16gb-memory-"
                        "256gb-storage") == "Apple Mac mini M6 chip 12 core CPU 12 core GPU 16GB memory 256GB storage"
     hunt = hunts.blank()
-    hunt.update(kind="tower", brands=["Apple"], cpu_family="M6", ram_min_gb=24, ram_type="Unified")
+    hunt.update(kind="tower", brands=["Apple"], cpu_family=["M6"], ram_min_gb=24, ram_type=["Unified"])
     found = specs.normalise("Apple Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 32GB memory, 1TB storage",
                             {"Brand": "Apple", "Processor": "Apple M6", "RAM": "32GB", "Storage": "1TB SSD"})
     verdict, chips = matching.evaluate(hunt, {"title": "t", "price_inr": 207900, "specs": {**found, "kind": "tower"}})
     assert verdict == "match" and ("M6 12-core", "match") in chips and ("12-core GPU", "plain") in chips
+
+
+def test_a_filter_with_several_choices_is_met_by_any_one_of_them():
+    form = MultiDict([("name", "Mixed"), ("kinds", "laptop"), ("retailers", "amazon"),
+                      ("cpu_brand", "AMD"), ("cpu_brand", "Intel"), ("cpu_family", "Ryzen 9"), ("cpu_family", "Core Ultra 9"),
+                      ("cpu_model", "275HX, 9955HX3D"), ("gpu_brand", "NVIDIA"), ("gpu_brand", "AMD"),
+                      ("ram_type", "DDR5"), ("ram_type", "LPDDR5X"), ("storage_type", "SSD"), ("series", "Legion Pro 7, ROG Strix")])
+    hunt, errors = hunts.parse_form(form)
+    assert not errors
+    assert (hunt["cpu_brand"], hunt["cpu_family"], hunt["cpu_model"]) == (["AMD", "Intel"], ["Ryzen 9", "Core Ultra 9"], ["275HX", "9955HX3D"])
+    assert (hunt["gpu_brand"], hunt["ram_type"], hunt["series"]) == (["NVIDIA", "AMD"], ["DDR5", "LPDDR5X"], ["Legion Pro 7", "ROG Strix"])
+    assert {"Ryzen 9", "Core Ultra 9", "NVIDIA GPU", "AMD GPU", "LPDDR5X", "ROG Strix"} <= set(hunts.chips(hunt))
+
+    def verdict(title):
+        return matching.evaluate(hunt, {"title": title, "price_inr": 250000, "specs": specs.normalise(title, {})})[0]
+
+    assert verdict("Lenovo Legion Pro 7 Intel Core Ultra 9 275HX RTX 5080 32GB DDR5 RAM 1TB SSD") == "match"
+    assert verdict("ASUS ROG Strix G16 AMD Ryzen 9 9955HX3D Radeon RX 9070 XT 32GB DDR5 RAM 1TB SSD") == "match"
+    # Neither of the two CPU families.
+    assert verdict("Lenovo Legion Pro 7 Intel Core Ultra 7 255HX RTX 5080 32GB DDR5 RAM 1TB SSD") != "match"
+    # A series that was not asked for.
+    assert verdict("MSI Raider 18 Intel Core Ultra 9 275HX RTX 5080 32GB DDR5 RAM 1TB SSD") != "match"
+
+
+def test_an_exact_chip_is_wanted_and_search_phrases_cover_each_choice():
+    hunt = hunts.blank()
+    hunt.update(brands=["Apple"], cpu_family=["M5", "M6"])
+    title = "Apple MacBook Pro 14 inch M5 Pro chip 24GB memory 1TB storage"
+    assert matching.evaluate(hunt, {"title": title, "price_inr": 1, "specs": specs.normalise(title, {})})[0] != "match"
+    assert search.queries(hunt) == ["Apple M5 laptop", "Apple M6 laptop"]
+    hunt.update(brands=["Lenovo", "ASUS"], series=[], cpu_family=["Ryzen 9", "Core Ultra 9"], gpu_models=["RTX 5080", "RTX 5070 Ti"])
+    assert search.queries(hunt) == ["Lenovo RTX 5080 laptop", "Lenovo RTX 5070 Ti laptop", "ASUS RTX 5080 laptop", "ASUS RTX 5070 Ti laptop"]
+
+
+def test_a_hunt_saved_with_single_values_still_opens():
+    assert hunts.as_list("Intel") == ["Intel"] and hunts.as_list(None) == [] and hunts.as_list('["AMD", "Intel"]') == ["AMD", "Intel"]
+    old = {field: None for field in hunts.COLUMNS}
+    old.update(name="Old", brands="[]", gpu_models='["RTX 5080"]', panels="[]", retailers='["amazon"]', cpu_brand="Intel", ram_type="DDR5")
+    hunt = hunts._decode(old)
+    assert (hunt["cpu_brand"], hunt["ram_type"], hunt["series"], hunt["gpu_models"]) == (["Intel"], ["DDR5"], [], ["RTX 5080"])
+    assert "Intel CPU" in hunts.chips(hunt)

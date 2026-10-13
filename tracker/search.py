@@ -3,6 +3,7 @@
 One thread per store, each with its own browser, a few at a time. Progress lives in memory
 (JOBS), which the results page polls; listings are written to the database as they are read.
 """
+import itertools
 import math
 import random
 import threading
@@ -25,7 +26,7 @@ _lock = threading.Lock()
 
 
 def queries(hunt, only_brands=None, kind=None):
-    """Search phrases for a hunt: one per brand and GPU combination, kept loose so stores return enough.
+    """Search phrases for a hunt: one per brand, series and GPU combination, kept loose so stores return enough.
 
     A brand's own store passes `only_brands`, so it is not asked about its competitors. A hunt for both
     laptops and towers is asked for one `kind` at a time.
@@ -35,20 +36,23 @@ def queries(hunt, only_brands=None, kind=None):
         wanted = [name.lower() for name in only_brands]
         brands = [brand for brand in brands if brand and brand.lower() in wanted] or list(only_brands)[:1]
     gpus = hunt["gpu_models"] or [None]
+    all_series = hunt["series"] or [None]
     kind = kind or hunts.kinds(hunt)[0]
+    # With no series or GPU to go on, the CPU family (or a single GPU brand) narrows the search instead.
+    loose = not hunt["series"] and not hunt["gpu_models"]
+    families = hunt["cpu_family"] if loose and hunt["cpu_family"] else [None]
+    gpu_brand = hunt["gpu_brand"][0] if loose and len(hunt["gpu_brand"]) == 1 and hunt["gpu_brand"] != ["Apple"] else None
+    if len(brands) * len(all_series) * len(gpus) * len(families) > MAX_QUERIES:
+        families = [None]  # too many combinations to ask for each: search wider and let the filters sort them
     phrases = []
-    for brand in brands:
-        for gpu in gpus:
-            parts = [brand, hunt["series"], gpu]
-            if not hunt["series"] and not gpu:
-                parts += [hunt["cpu_family"], hunt["gpu_brand"] if hunt["gpu_brand"] != "Apple" else None]
-            phrase = " ".join(part for part in parts if part)
-            if kind == "tower":
-                phrase = f"{phrase} desktop"
-            elif "macbook" not in phrase.lower():
-                phrase = f"{phrase} laptop"
-            if phrase not in phrases:
-                phrases.append(phrase)
+    for brand, series, gpu, family in itertools.product(brands, all_series, gpus, families):
+        phrase = " ".join(part for part in (brand, series, gpu, family, gpu_brand) if part)
+        if kind == "tower":
+            phrase = f"{phrase} desktop"
+        elif "macbook" not in phrase.lower():
+            phrase = f"{phrase} laptop"
+        if phrase not in phrases:
+            phrases.append(phrase)
     return phrases[:MAX_QUERIES]
 
 

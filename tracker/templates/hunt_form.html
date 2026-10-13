@@ -47,11 +47,33 @@
 {% endmacro %}
 
 {# One toggle in a multi-select. #}
-{% macro pill(name, value, checked) %}
+{% macro pill(name, value, checked, chip_suffix='') %}
 <label class="cursor-pointer">
-    <input type="checkbox" class="peer sr-only" name="{{ name }}" value="{{ value }}" {{ 'checked' if checked }} data-chip>
+    <input type="checkbox" class="peer sr-only" name="{{ name }}" value="{{ value }}" {{ 'checked' if checked }} data-chip data-chip-suffix="{{ chip_suffix }}">
     <span class="inline-flex rounded-full border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:peer-checked:border-emerald-600 dark:peer-checked:text-white dark:peer-focus-visible:ring-offset-slate-900">{{ value }}</span>
 </label>
+{% endmacro %}
+
+{# A multi-select: tick any number of the choices. #}
+{% macro pills(name, label, options, selected, chip_suffix='') %}
+<div class="sm:col-span-2">
+    <span class="label">{{ label }}</span>
+    <div class="flex flex-wrap gap-2">
+        {% for option in options %}{{ pill(name, option, option in selected, chip_suffix) }}{% endfor %}
+    </div>
+    {{ error(name) }}
+</div>
+{% endmacro %}
+
+{# Several typed values, comma separated. #}
+{% macro typed(name, label, values, placeholder, list_id='') %}
+<div class="sm:col-span-2">
+    <label class="label" for="f-{{ name }}">{{ label }}</label>
+    <input class="field" id="f-{{ name }}" name="{{ name }}" value="{{ values|join(', ') }}" placeholder="{{ placeholder }}"
+           autocomplete="off" data-chip {% if list_id %}list="{{ list_id }}"{% endif %}>
+    {% if list_id %}<datalist id="{{ list_id }}"></datalist>{% endif %}
+    <p class="muted mt-1 text-xs">Separate several with commas; a listing with any one of them fits.</p>
+</div>
 {% endmacro %}
 
 {# The typed-value box under a multi-select, pre-filled with choices not in the list. #}
@@ -111,18 +133,29 @@
         </div>
         {{ other('brands', hunt.brands, catalog.BRANDS, 'Another brand (comma separated)') }}
     </div>
-    {{ combo('series', 'Series / model line', hunt.series, [], 'Any, e.g. Legion Pro 7') }}
+    {{ typed('series', 'Series / model line', hunt.series, 'Any, e.g. Legion Pro 7', 'dl-series') }}
     <div data-laptop-only>{{ measure('weight_max_kg', 'Max weight', hunt.weight_max_kg, 'kg', [1.5, 2, 2.5, 3], '≤ ') }}</div>
     {% endcall %}
 
     {% call panel('CPU') %}
-    {{ combo('cpu_brand', 'CPU brand', hunt.cpu_brand, catalog.CPU_FAMILIES, chip_prefix='CPU: ') }}
-    {{ combo('cpu_family', 'CPU family', hunt.cpu_family, []) }}
-    {{ combo('cpu_model', 'CPU model (optional)', hunt.cpu_model, [], 'Any, e.g. 275HX') }}
+    {{ pills('cpu_brand', 'CPU brand', catalog.CPU_FAMILIES, hunt.cpu_brand, ' CPU') }}
+    <div class="sm:col-span-2">
+        <span class="label">CPU family</span>
+        <div class="space-y-3">
+            {% for brand, families in catalog.CPU_FAMILIES.items() %}
+            <div class="flex flex-wrap items-center gap-2" data-cpu-group="{{ brand }}">
+                <span class="muted w-16 text-xs">{{ brand }}</span>
+                {% for family in families %}{{ pill('cpu_family', family, family in hunt.cpu_family) }}{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {{ other('cpu_family', hunt.cpu_family, catalog.CPU_FAMILIES.values()|sum(start=[]), 'Another CPU family (comma separated)') }}
+    </div>
+    {{ typed('cpu_model', 'CPU model (optional)', hunt.cpu_model, 'Any, e.g. 275HX, 9955HX3D') }}
     {% endcall %}
 
     {% call panel('GPU') %}
-    {{ combo('gpu_brand', 'GPU brand', hunt.gpu_brand, catalog.GPU_MODELS, chip_prefix='GPU: ') }}
+    {{ pills('gpu_brand', 'GPU brand', catalog.GPU_MODELS, hunt.gpu_brand, ' GPU') }}
     {{ measure('vram_min_gb', 'VRAM, at least', hunt.vram_min_gb, 'GB', catalog.VRAM_GB, 'VRAM ≥ ') }}
     <div class="sm:col-span-2">
         <span class="label">GPU model</span>
@@ -140,12 +173,12 @@
 
     {% call panel('Memory') %}
     {{ measure('ram_min_gb', 'RAM size, at least', hunt.ram_min_gb, 'GB', catalog.RAM_GB, 'RAM ≥ ') }}
-    {{ combo('ram_type', 'RAM type', hunt.ram_type, catalog.RAM_TYPES) }}
+    {{ pills('ram_type', 'RAM type', catalog.RAM_TYPES, hunt.ram_type) }}
     {% endcall %}
 
     {% call panel('Storage') %}
-    {{ combo('storage_type', 'Storage type', hunt.storage_type, catalog.STORAGE_TYPES) }}
-    {{ combo('storage_interface', 'Storage interface (optional)', hunt.storage_interface, catalog.STORAGE_INTERFACES) }}
+    {{ pills('storage_type', 'Storage type', catalog.STORAGE_TYPES, hunt.storage_type) }}
+    {{ pills('storage_interface', 'Storage interface (optional)', catalog.STORAGE_INTERFACES, hunt.storage_interface) }}
     <div>
         <label class="label" for="f-storage_min_gb">Storage size, at least</label>
         <input class="field combo" id="f-storage_min_gb" name="storage_min_gb" value="{{ hunt.storage_min_gb|size if hunt.storage_min_gb else '' }}"

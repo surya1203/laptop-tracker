@@ -6,7 +6,10 @@ from datetime import datetime, timedelta, timezone
 from . import catalog
 from .db import get_db, now
 
-LIST_FIELDS = ("brands", "gpu_models", "panels", "retailers")
+# Filters that take several choices; a listing passes when it fits any one of them.
+# The seven after "retailers" held a single value before October 2026 and kept their column names.
+LIST_FIELDS = ("brands", "gpu_models", "panels", "retailers",
+               "series", "cpu_brand", "cpu_family", "cpu_model", "gpu_brand", "ram_type", "storage_type", "storage_interface")
 FILTER_FIELDS = (
     "kind", "brands", "series",
     "cpu_brand", "cpu_family", "cpu_model",
@@ -71,17 +74,20 @@ def describe(hunt):
     if hunt["brands"]:
         add(group, "Brand", ", ".join(hunt["brands"]), list(hunt["brands"]))
     if hunt["series"]:
-        add(group, "Series", hunt["series"], [hunt["series"]])
+        add(group, "Series", ", ".join(hunt["series"]), list(hunt["series"]))
 
-    for field, label in (("cpu_brand", "CPU brand"), ("cpu_family", "CPU family"), ("cpu_model", "CPU model")):
-        if hunt[field]:
-            add("CPU", label, hunt[field], [])
-    cpu = " ".join(hunt[f] for f in ("cpu_brand", "cpu_family", "cpu_model") if hunt[f])
-    if cpu:
-        rows[-1][3].append(cpu)  # one chip for the whole CPU
+    # A brand is implied by its families ("Ryzen 9" says AMD), so it only gets a chip when no family is picked.
+    if hunt["cpu_brand"]:
+        add("CPU", "CPU brand", ", ".join(hunt["cpu_brand"]),
+            [] if hunt["cpu_family"] else [f"{brand} CPU" for brand in hunt["cpu_brand"]])
+    if hunt["cpu_family"]:
+        add("CPU", "CPU family", ", ".join(hunt["cpu_family"]), list(hunt["cpu_family"]))
+    if hunt["cpu_model"]:
+        add("CPU", "CPU model", ", ".join(hunt["cpu_model"]), list(hunt["cpu_model"]))
 
     if hunt["gpu_brand"]:
-        add("GPU", "GPU brand", hunt["gpu_brand"], [] if hunt["gpu_models"] else [hunt["gpu_brand"]])
+        add("GPU", "GPU brand", ", ".join(hunt["gpu_brand"]),
+            [] if hunt["gpu_models"] else [f"{brand} GPU" for brand in hunt["gpu_brand"]])
     if hunt["gpu_models"]:
         add("GPU", "GPU model", ", ".join(hunt["gpu_models"]), list(hunt["gpu_models"]))
     if hunt["vram_min_gb"]:
@@ -89,13 +95,10 @@ def describe(hunt):
 
     if hunt["ram_min_gb"]:
         add("Memory", "RAM size", f"At least {hunt['ram_min_gb']} GB", [f"RAM ≥ {hunt['ram_min_gb']} GB"])
-    if hunt["ram_type"]:
-        add("Memory", "RAM type", hunt["ram_type"], [hunt["ram_type"]])
-
-    if hunt["storage_type"]:
-        add("Storage", "Storage type", hunt["storage_type"], [hunt["storage_type"]])
-    if hunt["storage_interface"]:
-        add("Storage", "Storage interface", hunt["storage_interface"], [hunt["storage_interface"]])
+    for group_name, field, label in (("Memory", "ram_type", "RAM type"), ("Storage", "storage_type", "Storage type"),
+                                     ("Storage", "storage_interface", "Storage interface")):
+        if hunt[field]:
+            add(group_name, label, ", ".join(hunt[field]), list(hunt[field]))
     if hunt["storage_min_gb"]:
         text = size(hunt["storage_min_gb"])
         add("Storage", "Storage size", f"At least {text}", [f"Storage ≥ {text}"])
@@ -138,7 +141,8 @@ def filter_groups(hunt):
 
 def blank():
     hunt = {field: None for field in COLUMNS}
-    hunt.update(name="", kind="laptop", brands=[], gpu_models=[], panels=[], retailers=list(catalog.DEFAULT_RETAILERS),
+    hunt.update({field: [] for field in LIST_FIELDS})
+    hunt.update(name="", kind="laptop", retailers=list(catalog.DEFAULT_RETAILERS),
                 alert_new_low=1, alert_back_in_stock=1, alert_new_match=1)
     return hunt
 
@@ -156,10 +160,12 @@ def _text(form, field, choices=()):
     return _canonical(value, choices) if value else None
 
 
-def _multi(form, field, choices):
+def _multi(form, field, choices=()):
+    """Every choice made for a filter: the ticked ones plus anything typed, comma separated."""
     typed = re.split(r"[,\n]", form.get(f"{field}_other", ""))
+    ticked = [part for value in form.getlist(field) for part in re.split(r"[,\n]", value)]
     values = []
-    for value in form.getlist(field) + typed:
+    for value in ticked + typed:
         value = " ".join(value.split())
         if value:
             value = _canonical(value, choices)
@@ -209,17 +215,17 @@ def parse_form(form):
     ticked = [key for key in catalog.KIND_LABELS if key in form.getlist("kinds")] or ["laptop"]
     hunt["kind"] = "both" if len(ticked) > 1 else ticked[0]
     hunt["brands"] = _multi(form, "brands", catalog.BRANDS)
-    hunt["series"] = _text(form, "series")
-    hunt["cpu_brand"] = _text(form, "cpu_brand", catalog.CPU_FAMILIES)
-    hunt["cpu_family"] = _text(form, "cpu_family", all_families)
-    hunt["cpu_model"] = _text(form, "cpu_model")
-    hunt["gpu_brand"] = _text(form, "gpu_brand", catalog.GPU_MODELS)
+    hunt["series"] = _multi(form, "series")
+    hunt["cpu_brand"] = _multi(form, "cpu_brand", catalog.CPU_FAMILIES)
+    hunt["cpu_family"] = _multi(form, "cpu_family", all_families)
+    hunt["cpu_model"] = _multi(form, "cpu_model")
+    hunt["gpu_brand"] = _multi(form, "gpu_brand", catalog.GPU_MODELS)
     hunt["gpu_models"] = _multi(form, "gpu_models", all_gpus)
     hunt["vram_min_gb"] = _number(form, "vram_min_gb", "VRAM", errors, whole=True, units=gb)
     hunt["ram_min_gb"] = _number(form, "ram_min_gb", "RAM size", errors, whole=True, units=gb)
-    hunt["ram_type"] = _text(form, "ram_type", catalog.RAM_TYPES)
-    hunt["storage_type"] = _text(form, "storage_type", catalog.STORAGE_TYPES)
-    hunt["storage_interface"] = _text(form, "storage_interface", catalog.STORAGE_INTERFACES)
+    hunt["ram_type"] = _multi(form, "ram_type", catalog.RAM_TYPES)
+    hunt["storage_type"] = _multi(form, "storage_type", catalog.STORAGE_TYPES)
+    hunt["storage_interface"] = _multi(form, "storage_interface", catalog.STORAGE_INTERFACES)
     hunt["storage_min_gb"] = _number(form, "storage_min_gb", "Storage size", errors, whole=True, units=gb)
     hunt["screen_min_in"] = _number(form, "screen_min_in", "Screen size (min)", errors)
     hunt["screen_max_in"] = _number(form, "screen_max_in", "Screen size (max)", errors)
@@ -259,14 +265,23 @@ def parse_form(form):
 
 # ---------- storage ----------
 
+def as_list(value):
+    """A list filter as stored: a JSON list, or the single plain value a hunt saved before it could hold several."""
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    if not value:
+        return []
+    return json.loads(value) if value.lstrip().startswith("[") else [value]
+
+
 def _encode(hunt):
-    return [json.dumps(hunt[c]) if c in LIST_FIELDS else hunt[c] for c in COLUMNS]
+    return [json.dumps(as_list(hunt[c])) if c in LIST_FIELDS else hunt[c] for c in COLUMNS]
 
 
 def _decode(row):
     hunt = dict(row)
     for field in LIST_FIELDS:
-        hunt[field] = json.loads(hunt[field] or "[]")
+        hunt[field] = as_list(hunt[field])
     return hunt
 
 

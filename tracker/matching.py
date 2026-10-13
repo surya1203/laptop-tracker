@@ -30,6 +30,11 @@ def _mentions(haystack, needle):
     return squash(needle) in squash(haystack)
 
 
+def _among(value, wanted):
+    """Whether a listing's value is one of the choices picked for a filter, whatever the capitals."""
+    return (value or "").lower() in [choice.lower() for choice in wanted]
+
+
 def evaluate(hunt, listing):
     """Returns (verdict, chips). verdict is 'match', 'near' or 'miss'; chips is [(text, state), ...]."""
     specs = listing["specs"]
@@ -46,18 +51,22 @@ def evaluate(hunt, listing):
     wanted = [b.lower() for b in hunt["brands"]]
     chip(brand, _state(wanted, brand, (brand or "").lower() in wanted), "Brand")
 
+    # Where a filter has several choices, fitting any one of them is enough.
     if hunt["series"]:
         name = f"{listing['title']} {specs.get('series') or ''}"
-        chips.append((hunt["series"], MATCH if _mentions(name, hunt["series"]) else MISS))
+        found = [series for series in hunt["series"] if _mentions(name, series)]
+        chips.append((found[0], MATCH) if found else (" / ".join(hunt["series"]), MISS))
 
     cpu_text = specs.get("cpu_text") or ""
+    family = (specs.get("cpu_family") or "").lower()
+    known_families = {f.lower() for families in catalog.CPU_FAMILIES.values() for f in families}
     cpu = _worst(
-        _state(hunt["cpu_brand"], specs.get("cpu_brand"),
-               (specs.get("cpu_brand") or "").lower() == (hunt["cpu_brand"] or "").lower()),
-        _state(hunt["cpu_family"], specs.get("cpu_family") or cpu_text.strip(),
-               (specs.get("cpu_family") or "").lower() == (hunt["cpu_family"] or "").lower()
-               or _mentions(cpu_text, hunt["cpu_family"] or "")),
-        _state(hunt["cpu_model"], cpu_text.strip(), _mentions(cpu_text, hunt["cpu_model"] or "")),
+        _state(hunt["cpu_brand"], specs.get("cpu_brand"), _among(specs.get("cpu_brand"), hunt["cpu_brand"])),
+        # A catalog family has to be the one read ("M5" is not "M5 Pro"); a typed one only has to be mentioned.
+        _state(hunt["cpu_family"], family or cpu_text.strip(),
+               any(family == f.lower() if family and f.lower() in known_families else _mentions(cpu_text, f)
+                   for f in hunt["cpu_family"])),
+        _state(hunt["cpu_model"], cpu_text.strip(), any(_mentions(cpu_text, model) for model in hunt["cpu_model"])),
     )
     cores = specs.get("cpu_cores")
     chip(" ".join(p for p in (specs.get("cpu_family") or specs.get("cpu_brand"), specs.get("cpu_model"),
@@ -71,8 +80,7 @@ def evaluate(hunt, listing):
         for m in wanted_models
     )
     gpu = _worst(
-        _state(hunt["gpu_brand"], specs.get("gpu_brand"),
-               (specs.get("gpu_brand") or "").lower() == (hunt["gpu_brand"] or "").lower()),
+        _state(hunt["gpu_brand"], specs.get("gpu_brand"), _among(specs.get("gpu_brand"), hunt["gpu_brand"])),
         _state(wanted_models, gpu_model or gpu_text.strip(), model_ok),
     )
     cores = specs.get("gpu_cores")
@@ -86,22 +94,22 @@ def evaluate(hunt, listing):
     at_least("ram_gb", hunt["ram_min_gb"], lambda v: f"{v} GB RAM", "RAM")
 
     ram_type = specs.get("ram_type")
-    chip(ram_type, _state(hunt["ram_type"], ram_type, (ram_type or "").lower() == (hunt["ram_type"] or "").lower()), "RAM type")
+    chip(ram_type, _state(hunt["ram_type"], ram_type, _among(ram_type, hunt["ram_type"])), "RAM type")
 
     storage_type = specs.get("storage_type")
     storage_gb = specs.get("storage_gb")
     storage = _worst(
-        _state(hunt["storage_type"], storage_type, storage_type == hunt["storage_type"]),
+        _state(hunt["storage_type"], storage_type, _among(storage_type, hunt["storage_type"])),
         _state(hunt["storage_min_gb"], storage_gb, storage_gb and storage_gb >= (hunt["storage_min_gb"] or 0)),
     )
     chip(" ".join(p for p in (size(storage_gb) if storage_gb else None, storage_type) if p), storage, "Storage")
 
     interface = specs.get("storage_interface")
     # A bare "NVMe" does not say which PCIe generation, so it cannot confirm or rule out a specific one.
-    exact = interface if interface != "NVMe" or hunt["storage_interface"] == "NVMe" else None
-    state = _state(hunt["storage_interface"], exact, exact == hunt["storage_interface"])
+    exact = interface if interface != "NVMe" or "NVMe" in hunt["storage_interface"] else None
+    state = _state(hunt["storage_interface"], exact, _among(exact, hunt["storage_interface"]))
     if hunt["storage_interface"] or interface:
-        chip(interface if state != UNKNOWN else None, state, hunt["storage_interface"] or "Interface")
+        chip(interface if state != UNKNOWN else None, state, " / ".join(hunt["storage_interface"]) or "Interface")
 
     # A tower has no screen or carrying weight, so those filters are not held against it.
     tower = specs.get("kind") == "tower"

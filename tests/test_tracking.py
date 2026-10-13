@@ -275,3 +275,27 @@ def test_hunt_form_reads_alert_rules():
     assert not errors
     assert (hunt["alert_new_low"], hunt["alert_back_in_stock"], hunt["alert_target_inr"], hunt["alert_drop_pct"]) == (1, 0, 225000, 5)
     assert hunts.blank()["alert_new_low"] == 1
+
+
+def test_two_points_from_one_round_do_not_hide_a_price_change():
+    from tracker import history
+
+    def point(price, when):
+        return {"price_inr": price, "mrp_inr": None, "in_stock": 1, "checked_at": when, "source": None}
+
+    # Two copies of the app both checked at 20:44; the price had fallen since 18:42.
+    points = [point(326607, "2026-10-12T18:42:35+00:00"), point(323608, "2026-10-12T20:44:21+00:00"),
+              point(323608, "2026-10-12T20:44:33+00:00")]
+    found = history.summary(points)
+    assert (found["price_inr"], found["previous_inr"], found["change_inr"]) == (323608, 326607, -2999)
+
+
+def test_only_one_copy_of_the_app_takes_a_round_of_checks():
+    import sqlite3
+
+    from tracker import scheduler
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+    assert scheduler.claim_round(conn) and not scheduler.claim_round(conn)
+    assert scheduler.claim_round(conn, minutes=-1) is True  # a later round is free again

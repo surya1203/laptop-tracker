@@ -79,32 +79,25 @@ if (form) {
         syncSeries();
     };
 
-    // CPU brand -> CPU family choices. A family from another brand is cleared.
-    const syncCpu = (changed) => {
-        const brand = field('cpu_brand').value;
-        const families = lookup(catalog.cpu_families, brand);
-        fill('dl-cpu_family', families || (brand.trim() ? [] : everything(catalog.cpu_families)));
-        const family = field('cpu_family');
-        const known = everything(catalog.cpu_families).includes(family.value);
-        if (changed && families && known && !families.includes(family.value)) family.value = '';
-    };
-
-    // GPU brand -> GPU model choices. Models of other brands are hidden and unticked.
-    const syncGpu = (changed) => {
-        const brand = field('gpu_brand').value.trim().toLowerCase();
-        form.querySelectorAll('[data-gpu-group]').forEach((group) => {
-            const show = !brand || group.dataset.gpuGroup.toLowerCase() === brand;
+    // Ticked brands -> the rows of choices shown for them (every row when no brand is ticked).
+    // Choices of a brand that is not ticked are hidden and unticked.
+    const syncGroups = (brandField, attribute, changed) => {
+        const ticked = [...form.querySelectorAll(`input[name="${brandField}"]:checked`)].map((box) => box.value);
+        form.querySelectorAll(`[${attribute}]`).forEach((group) => {
+            const show = !ticked.length || ticked.includes(group.getAttribute(attribute));
             group.classList.toggle('hidden', !show);
             if (changed && !show) group.querySelectorAll('input').forEach((box) => { box.checked = false; });
         });
     };
+    const syncCpu = (changed) => syncGroups('cpu_brand', 'data-cpu-group', changed);
+    const syncGpu = (changed) => syncGroups('gpu_brand', 'data-gpu-group', changed);
 
     // One removable chip per filter that is set.
     const bar = document.getElementById('active-filters');
     const empty = document.getElementById('no-filters');
     const chipText = (input) => {
         const { chipPrefix = '', chipSuffix = '' } = input.dataset;
-        if (input.type === 'checkbox') return input.checked ? input.value : '';
+        if (input.type === 'checkbox') return input.checked ? input.value + chipSuffix : '';
         if (input.tagName === 'SELECT') return input.value ? chipPrefix + input.selectedOptions[0].dataset.chipText : '';
         return input.value.trim() ? chipPrefix + input.value.trim() + chipSuffix : '';
     };

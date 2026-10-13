@@ -8,6 +8,9 @@ from datetime import datetime, timedelta, timezone
 
 SPARK_WIDTH, SPARK_HEIGHT = 120, 28
 SPARK_DAYS = 30
+# Points this close together belong to one round of checks (a second copy of the app, or "Check now" pressed
+# straight after), so the newest is not compared with them.
+SAME_ROUND = timedelta(minutes=10)
 
 
 def _when(point):
@@ -27,7 +30,7 @@ def summary(points, now=None):
     priced = [p for p in points if p["price_inr"] and p["in_stock"]]
     latest = points[-1] if points else None
     current = latest["price_inr"] if latest else None
-    earlier = [p for p in priced if p is not latest]
+    earlier = [p for p in priced if _when(p) <= _when(latest) - SAME_ROUND]
     previous = earlier[-1]["price_inr"] if earlier else None
     low = min(priced, key=lambda p: p["price_inr"], default=None)
     recent = [p for p in priced if _when(p) >= now - timedelta(days=30)]

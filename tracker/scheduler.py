@@ -89,6 +89,19 @@ def search_hunts(app, options):
         set_setting("last_search_at", now())
 
 
+def claim_round(conn, minutes=10):
+    """Take this round of checks, unless another copy of the app sharing the database took it moments ago.
+
+    Two copies left running would otherwise each check every listing and each send an update.
+    """
+    stamp = datetime.now(timezone.utc)
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('check_claimed_at', '')")
+    taken = conn.execute("UPDATE settings SET value = ? WHERE key = 'check_claimed_at' AND value < ?",
+                         (stamp.isoformat(timespec="seconds"), (stamp - timedelta(minutes=minutes)).isoformat(timespec="seconds")))
+    conn.commit()
+    return taken.rowcount == 1
+
+
 def send_update(app, options, since):
     """After a scheduled round that began at `since`, send where every tracked listing stands, if that is switched on."""
     with app.app_context():
@@ -118,6 +131,7 @@ def _loop(app):
             conn = connect(options["database"])
             try:
                 due = next_check(conn) <= datetime.now(timezone.utc) and bool(checker.due_listings(conn))
+                due = due and not checker.RUN["running"] and claim_round(conn)
                 search_at = next_search(conn)
             finally:
                 conn.close()
