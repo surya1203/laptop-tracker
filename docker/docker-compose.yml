@@ -1,0 +1,41 @@
+# PC Tracker in containers: two jobs from one image, sharing the database on a volume.
+# Run from the repository root:
+#
+#   docker compose -f docker/docker-compose.yml up -d --build web     the website, on http://localhost:5000
+#   docker compose -f docker/docker-compose.yml run --rm job          one round of checks and searches, then it exits
+#
+# `web` does not run the schedule itself; a timer starts `job` every few hours instead
+# (cron on a server, Task Scheduler on Windows), so nothing has to stay busy between rounds.
+# Credentials for alerts come from the .env file in the repository root, if there is one.
+
+name: pc-tracker
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: pc-tracker
+    ports:
+      - "${PORT:-5000}:5000"
+    environment:
+      SCHEDULER: "0"
+    env_file:
+      - path: ../.env
+        required: false
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+  job:
+    image: pc-tracker
+    command: ["python", "job.py"]
+    env_file:
+      - path: ../.env
+        required: false
+    volumes:
+      - data:/data
+    profiles: ["job"]
+
+volumes:
+  data:

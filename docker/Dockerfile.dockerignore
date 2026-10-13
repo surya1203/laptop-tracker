@@ -1,0 +1,12 @@
+# Secrets and personal data never go into the image.
+.env
+tracker.db
+*.log
+
+.git
+_old
+tests
+__pycache__
+*.pyc
+venv
+env
