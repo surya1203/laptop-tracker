@@ -21,6 +21,12 @@ _RESOLUTION_NAMES = [
     (r"fhd|full hd|1080p", "FHD"),
 ]
 _RAM_TYPES = ["LPDDR5X", "LPDDR5", "LPDDR4X", "DDR5", "DDR4", "DDR3"]
+# What Apple builds into every MacBook of a line; listings rarely spell it out.
+# (line, screen inches) -> (pixels, refresh Hz, panel, weight kg)
+_MAC_DISPLAYS = {
+    ("air", 13): ((2560, 1664), 60, "IPS", 1.24), ("air", 15): ((2880, 1864), 60, "IPS", 1.51),
+    ("pro", 14): ((3024, 1964), 120, "Mini-LED", 1.6), ("pro", 16): ((3456, 2234), 120, "Mini-LED", 2.15),
+}
 
 
 def _loose(text):
@@ -90,7 +96,7 @@ def _cpu(table, title):
     text = f"{table.like(r'^(processor|cpu|coretype|processorfamily|processormodel(number)?)$')} {text}"
     low = text.lower()
     brand = None
-    for name, pattern in (("Apple", r"\bapple\b|\bm[1-5]\b(?! ?\.)"), ("Qualcomm", r"snapdragon|qualcomm"),
+    for name, pattern in (("Apple", r"\bapple\b|\bm[1-9]\b(?! ?\.)"), ("Qualcomm", r"snapdragon|qualcomm"),
                           ("AMD", r"ryzen|\bamd\b"), ("Intel", r"\bintel\b|core\s*(ultra|i[3579])|\bi[3579][- ]\d")):
         if re.search(pattern, low):
             brand = name
@@ -101,6 +107,10 @@ def _cpu(table, title):
         if re.search(rf"(?<![a-z0-9]){_loose(name)}(?![a-z0-9])", low, re.I):
             family = name
             break
+    if not family and brand == "Apple":
+        chip = re.search(r"\bm(\d)(?:\s*(pro|max|ultra))?\b(?! ?\.)", low)  # a chip newer than the catalog
+        if chip:
+            family = f"M{chip.group(1)} {(chip.group(2) or '').title()}".strip()
     if not family:
         bare = re.search(r"\bi([3579])[- ]\d{4,5}", low)  # "i7-13650HX" with no "Core"
         if bare:
@@ -136,6 +146,12 @@ def _gpu(table, title):
     return brand, model, text
 
 
+def _cores(text, part):
+    """'16-core CPU' -> 16. Apple sells the same chip with different core counts."""
+    match = re.search(rf"(\d{{1,2}})[\s‐-―-]*core {part}", text or "", re.I)
+    return int(match.group(1)) if match else None
+
+
 def _resolution(table, title):
     for value in (table.get("Screen Resolution"), table.get("Native Resolution"),
                   table.get("Maximum Display Resolution"), table.get("Display Maximum Resolution"),
@@ -166,6 +182,10 @@ def normalise(title, raw):
 
     specs["cpu_brand"], specs["cpu_family"], specs["cpu_model"], specs["cpu_text"] = _cpu(table, title)
     specs["gpu_brand"], specs["gpu_model"], specs["gpu_text"] = _gpu(table, title)
+    mac = specs["cpu_brand"] == "Apple"
+    if mac and not specs["gpu_model"]:
+        specs["gpu_brand"], specs["gpu_model"] = "Apple", "Apple integrated"  # every Apple chip has its graphics built in
+    specs["cpu_cores"], specs["gpu_cores"] = _cores(title, "cpu"), _cores(title, "gpu")
 
     vram = _gb(table.get("Graphics RAM Size", "Dedicated Graphic Memory Capacity", "Graphics Card Ram Size",
                          "Graphic Card Memory", "Graphics Memory", "Dedicated Graphics Memory", "Graphics Card Memory"))
@@ -182,11 +202,16 @@ def normalise(title, raw):
     if not ram:
         match = re.search(r"(\d{1,3})\s*GB\s*(?:(?:LP)?DDR\w*\s*)?RAM|\(\s*(\d{1,3})\s*GB\s*/", title, re.I)
         ram = int(match.group(1) or match.group(2)) if match else None
+    if not ram and mac:
+        match = re.search(r"(\d{1,3})\s*GB\s*(?:unified\s*)?(?:memory|RAM)", title, re.I)
+        ram = int(match.group(1)) if match else None
     specs["ram_gb"] = ram
 
     ram_text = (table.join("RAM Type", "RAM Memory Technology", "System RAM Type", "Memory Technology", "Type of RAM",
                            "Memory", "Memory Details", "RAM") + " " + title).upper()
     specs["ram_type"] = next((t for t in _RAM_TYPES if re.search(rf"(?<![A-Z]){t}(?![A-Z0-9])", ram_text)), None)
+    if mac and not specs["ram_type"]:
+        specs["ram_type"] = "Unified"
 
     ssd = _gb(table.get("SSD Capacity"))
     hdd = _gb(table.get("HDD Capacity"))
@@ -196,11 +221,16 @@ def normalise(title, raw):
     if not storage:
         match = re.search(r"(\d+(?:\.\d+)?)\s*(TB|GB)\s*(?:NVMe\s*|PCIe\s*|M\.2\s*)*(?:SSD|HDD)", title, re.I)
         storage = _gb(match.group(0)) if match else None
+    if not storage and mac:
+        # "1TB storage", or the size that follows the memory: "16GB Unified Memory, 256GB".
+        match = (re.search(r"\d+\s*(?:TB|GB)(?=\s*(?:SSD\s*)?storage)", title, re.I)
+                 or re.search(r"memory\W+(\d+\s*(?:TB|GB))\b", title, re.I))
+        storage = _gb(match.group(0)) if match else None
     specs["storage_gb"] = storage
 
     storage_text = (table.join("Storage Type", "Hard Disk Description", "Hard Drive Interface", "Storage",
                                "Storage Type Capacity", "Hard Drive", "SSD Type") + " " + title).lower()
-    has_ssd = bool(ssd) or bool(re.search(r"\bssd\b|nvme|solid state", storage_text))
+    has_ssd = bool(ssd) or bool(re.search(r"\bssd\b|nvme|solid state", storage_text)) or mac  # no Apple chip Mac has a hard disk
     has_hdd = bool(hdd) or bool(re.search(r"\bhdd\b|mechanical hard", storage_text))
     specs["storage_type"] = "SSD + HDD" if has_ssd and has_hdd else "SSD" if has_ssd else "HDD" if has_hdd else None
 
@@ -217,7 +247,7 @@ def normalise(title, raw):
     screen = None
     for value in (table.get("Screen Size", "Standing screen display size", "Display Size (In Inches)", "Screen Size (Diagonal)",
                             "Display Size", "Display"), title):
-        match = re.search(r"(\d{2}(?:\.\d+)?)\s*(?:-\s*)?(?:inch|inches|in\b|\"|”)", value or "", re.I)
+        match = re.search(r"(\d{2}(?:\.\d+)?)\s*(?:-\s*)?(?:inch|inches|in\b|\"|”|″)", value or "", re.I)
         if match and 10 <= float(match.group(1)) <= 21:
             screen = float(match.group(1))
             break
@@ -237,8 +267,10 @@ def normalise(title, raw):
 
     panel_text = (table.join("Screen Type", "Display Type", "Display Technology", "Display", "Panel Type", "Panel") + " " + title).lower()
     specs["panel"] = ("OLED" if "oled" in panel_text else
-                      "Mini-LED" if re.search(r"mini[\s-]*led", panel_text) else
-                      "IPS" if re.search(r"\bips\b", panel_text) else None)
+                      "Mini-LED" if re.search(r"mini[\s-]*led|retina xdr", panel_text) else
+                      "IPS" if re.search(r"\bips\b|liquid retina", panel_text) else None)
+    if not specs["refresh_hz"] and "promotion" in panel_text:
+        specs["refresh_hz"] = 120
 
     weight = None
     weight_text = table.get("Item Weight", "Weight", "Product Weight") or ""
@@ -254,6 +286,16 @@ def normalise(title, raw):
         match = re.search(r"(\d(?:\.\d+)?)\s*kg\b", title, re.I)
         weight = float(match.group(1)) if match else None
     specs["weight_kg"] = round(weight, 2) if weight and 0.5 <= weight <= 6 else None
+
+    line = re.search(r"macbook\s*(air|pro)", title, re.I)
+    built_in = _MAC_DISPLAYS.get((line.group(1).lower(), int(screen))) if mac and line and screen else None
+    if built_in:
+        (width, height), refresh, panel, weight = built_in
+        if not specs["resolution"]:
+            specs["resolution"], specs["resolution_px"] = resolution_class(width, height), f"{width} × {height}"
+        specs["refresh_hz"] = specs["refresh_hz"] or refresh
+        specs["panel"] = specs["panel"] or panel
+        specs["weight_kg"] = specs["weight_kg"] or weight
 
     specs["model_number"] = table.get("Manufacturer Part Number", "Part Number", "Item model number", "Model Number", "MPN")
     return specs

@@ -13,7 +13,7 @@ SERIES = {
     "Dell": ["Alienware 16 Area-51", "Alienware m16", "Alienware x16", "G15", "XPS 14", "Inspiron 16"],
     "MSI": ["Titan 18 HX", "Raider 18 HX", "Vector 16 HX", "Stealth 16", "Katana 15", "Cyborg 15"],
     "Acer": ["Predator Helios 18", "Predator Helios 16", "Predator Helios Neo 16", "Nitro V 15", "Swift"],
-    "Apple": ["MacBook Pro 16", "MacBook Pro 14", "MacBook Air 15", "MacBook Air 13"],
+    "Apple": ["MacBook Pro 16", "MacBook Pro 14", "MacBook Air 15", "MacBook Air 13", "MacBook Neo"],
     "Samsung": ["Galaxy Book Ultra", "Galaxy Book Pro"],
     "Gigabyte": ["AORUS Master 16", "AORUS 16X", "AERO 16"],
 }
@@ -32,7 +32,8 @@ CPU_FAMILIES = {
     "Intel": ["Core Ultra 9", "Core Ultra 7", "Core Ultra 5", "Core 9", "Core 7", "Core 5",
               "Core i9", "Core i7", "Core i5", "Core i3"],
     "AMD": ["Ryzen 9", "Ryzen 7", "Ryzen 5", "Ryzen AI 9", "Ryzen AI 7", "Ryzen AI 5"],
-    "Apple": ["M5 Max", "M5 Pro", "M5", "M4 Max", "M4 Pro", "M4", "M3 Max", "M3 Pro", "M3"],
+    "Apple": ["M6 Max", "M6 Pro", "M6", "M5 Ultra", "M5 Max", "M5 Pro", "M5", "M4 Max", "M4 Pro", "M4",
+              "M3 Ultra", "M3 Max", "M3 Pro", "M3", "M2 Ultra", "M2 Max", "M2 Pro", "M2", "M1", "A18 Pro"],
     "Qualcomm": ["Snapdragon X Elite", "Snapdragon X Plus", "Snapdragon X"],
 }
 
@@ -45,14 +46,15 @@ GPU_MODELS = {
 }
 
 VRAM_GB = [4, 6, 8, 12, 16, 24]
-RAM_GB = [8, 16, 24, 32, 64, 96]
-RAM_TYPES = ["DDR5", "LPDDR5X", "LPDDR5", "DDR4"]
+# 18, 36, 48 and 128 GB are sizes Macs come in. "Unified" is Apple's memory, shared by the CPU and GPU.
+RAM_GB = [8, 16, 18, 24, 32, 36, 48, 64, 96, 128]
+RAM_TYPES = ["DDR5", "LPDDR5X", "LPDDR5", "DDR4", "Unified"]
 
 STORAGE_TYPES = ["SSD", "HDD", "SSD + HDD"]
 STORAGE_INTERFACES = ["NVMe PCIe 5.0", "NVMe PCIe 4.0", "NVMe PCIe 3.0", "SATA"]
-STORAGE_GB = [256, 512, 1024, 2048, 4096]
+STORAGE_GB = [256, 512, 1024, 2048, 4096, 8192]
 
-SCREEN_INCHES = [13.3, 14, 15.6, 16, 17.3, 18]
+SCREEN_INCHES = [13.3, 13.6, 14, 14.2, 15.3, 15.6, 16, 16.2, 17.3, 18]
 # Ordered low to high so "at least" comparisons work by position.
 RESOLUTIONS = ["HD", "FHD", "FHD+", "QHD", "QHD+", "4K"]
 RESOLUTION_PIXELS = {
@@ -82,8 +84,8 @@ BRAND_STORES = [
 ]
 RETAILER_LABELS = {key: label for key, label, *_ in MULTI_BRAND_STORES + BRAND_STORES}
 DEFAULT_RETAILERS = list(RETAILER_LABELS)
-# The stores that sell tower PCs. The ASUS, Acer, Apple and Samsung stores list none.
-TOWER_RETAILERS = ("amazon", "flipkart", "croma", "vijaysales", "reliancedigital", "lenovo", "dell")
+# The stores that sell tower PCs (Apple's are the Mac mini and Mac Studio). The ASUS, Acer and Samsung stores list none.
+TOWER_RETAILERS = ("amazon", "flipkart", "croma", "vijaysales", "reliancedigital", "lenovo", "dell", "apple")
 
 
 def for_browser():

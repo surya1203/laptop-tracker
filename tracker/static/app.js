@@ -48,28 +48,34 @@ if (form) {
         document.getElementById(listId).replaceChildren(...values.map((v) => new Option('', v)));
     };
 
+    // Laptops, tower PCs or both. One of the two always stays ticked.
+    const wants = (kind) => form.querySelector(`input[name="kinds"][value="${kind}"]`).checked;
+
     // Brand -> series suggestions (all ticked brands, or every brand when none is ticked).
     const syncSeries = () => {
         const ticked = [...form.querySelectorAll('input[name="brands"]:checked')].map((box) => box.value);
-        const names = field('kind').value === 'tower' ? catalog.tower_series : catalog.series;
-        const series = ticked.flatMap((brand) => lookup(names, brand) || []);
-        fill('dl-series', ticked.length ? series : everything(names));
+        const maps = [wants('laptop') && catalog.series, wants('tower') && catalog.tower_series].filter(Boolean);
+        const series = ticked.flatMap((brand) => maps.flatMap((names) => lookup(names, brand) || []));
+        fill('dl-series', ticked.length ? series : maps.flatMap(everything));
     };
 
-    // Laptop or tower: a tower has no screen or carrying weight to filter on, and fewer stores sell one.
-    const syncKind = () => {
-        const tower = field('kind').value === 'tower';
+    // A tower has no screen or carrying weight to filter on, and fewer stores sell one.
+    const syncKind = (changed) => {
+        if (!wants('laptop') && !wants('tower')) (changed || form.querySelector('input[name="kinds"]')).checked = true;
+        const laptop = wants('laptop');
+        const tower = wants('tower');
         form.querySelectorAll('[data-laptop-only]').forEach((part) => {
-            part.classList.toggle('hidden', tower);
-            part.querySelectorAll('input, select').forEach((input) => { input.disabled = tower; });
+            part.classList.toggle('hidden', !laptop);
+            part.querySelectorAll('input, select').forEach((input) => { input.disabled = !laptop; });
         });
         form.querySelectorAll('[data-tower-only]').forEach((part) => part.classList.toggle('hidden', !tower));
         form.querySelectorAll('input[name="retailers"]').forEach((box) => {
-            box.disabled = tower && !catalog.tower_retailers.includes(box.value);
+            box.disabled = !laptop && !catalog.tower_retailers.includes(box.value);
             box.closest('label').classList.toggle('opacity-50', box.disabled);
         });
-        form.querySelectorAll('[data-kind-word]').forEach((word) => { word.textContent = tower ? 'tower PC' : 'laptop'; });
-        field('series').placeholder = tower ? 'Any, e.g. Legion Tower 5' : 'Any, e.g. Legion Pro 7';
+        const word = laptop && tower ? 'laptop or tower PC' : tower ? 'tower PC' : 'laptop';
+        form.querySelectorAll('[data-kind-word]').forEach((spot) => { spot.textContent = word; });
+        field('series').placeholder = laptop ? 'Any, e.g. Legion Pro 7' : 'Any, e.g. Legion Tower 5';
         syncSeries();
     };
 
@@ -125,7 +131,7 @@ if (form) {
     form.addEventListener('input', (event) => {
         const name = event.target.name;
         if (name === 'brands') syncSeries();
-        if (name === 'kind') syncKind();
+        if (name === 'kinds') syncKind(event.target);
         if (name === 'cpu_brand') syncCpu(true);
         if (name === 'gpu_brand') syncGpu(true);
         syncChips();

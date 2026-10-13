@@ -51,9 +51,9 @@ def size(gb):
     return f"{gb} GB"
 
 
-def kind(hunt):
-    """'laptop' or 'tower'. Hunts saved before towers were added are laptop hunts."""
-    return hunt.get("kind") or "laptop"
+def kinds(hunt):
+    """What a hunt looks for: ['laptop'], ['tower'] or both. Hunts saved before towers were added are laptop hunts."""
+    return ["laptop", "tower"] if hunt.get("kind") == "both" else [hunt.get("kind") or "laptop"]
 
 
 def describe(hunt):
@@ -63,9 +63,11 @@ def describe(hunt):
     def add(group, label, value, chips):
         rows.append((group, label, value, chips))
 
-    group = catalog.KIND_LABELS.get(kind(hunt), "Laptop")
-    if kind(hunt) != "laptop":
-        add(group, "Type", group, [group])
+    wanted = kinds(hunt)
+    group = catalog.KIND_LABELS[wanted[0]] if len(wanted) == 1 else "Model"
+    if wanted != ["laptop"]:
+        text = " or ".join(catalog.KIND_LABELS[key] for key in wanted)
+        add(group, "Type", text, [text])
     if hunt["brands"]:
         add(group, "Brand", ", ".join(hunt["brands"]), list(hunt["brands"]))
     if hunt["series"]:
@@ -204,7 +206,8 @@ def parse_form(form):
     if not hunt["name"]:
         errors["name"] = "Give the hunt a name."
 
-    hunt["kind"] = form.get("kind") if form.get("kind") in catalog.KIND_LABELS else "laptop"
+    ticked = [key for key in catalog.KIND_LABELS if key in form.getlist("kinds")] or ["laptop"]
+    hunt["kind"] = "both" if len(ticked) > 1 else ticked[0]
     hunt["brands"] = _multi(form, "brands", catalog.BRANDS)
     hunt["series"] = _text(form, "series")
     hunt["cpu_brand"] = _text(form, "cpu_brand", catalog.CPU_FAMILIES)

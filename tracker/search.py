@@ -8,7 +8,7 @@ import random
 import threading
 import time
 
-from . import listings, specs
+from . import hunts, listings, specs
 from .browser import open_page
 from .db import connect, now
 from .stores import STORES, sells
@@ -24,17 +24,18 @@ JOBS = {}  # hunt id -> the latest job for that hunt
 _lock = threading.Lock()
 
 
-def queries(hunt, only_brands=None):
+def queries(hunt, only_brands=None, kind=None):
     """Search phrases for a hunt: one per brand and GPU combination, kept loose so stores return enough.
 
-    A brand's own store passes `only_brands`, so it is not asked about its competitors.
+    A brand's own store passes `only_brands`, so it is not asked about its competitors. A hunt for both
+    laptops and towers is asked for one `kind` at a time.
     """
     brands = hunt["brands"] or [None]
     if only_brands:
         wanted = [name.lower() for name in only_brands]
         brands = [brand for brand in brands if brand and brand.lower() in wanted] or list(only_brands)[:1]
     gpus = hunt["gpu_models"] or [None]
-    kind = hunt.get("kind") or "laptop"
+    kind = kind or hunts.kinds(hunt)[0]
     phrases = []
     for brand in brands:
         for gpu in gpus:
@@ -56,7 +57,9 @@ def _pause(low=1.5, high=4.0):
 
 
 def _run_store(store, state, hunt, options, turn):
-    phrases = queries(hunt, getattr(store, "BRANDS", None))
+    # (phrase, kind) pairs: a store is asked about laptops and about towers separately, each in its own category.
+    phrases = [(phrase, kind) for kind in hunts.kinds(hunt) if sells(store, hunt["brands"], kind)
+               for phrase in queries(hunt, getattr(store, "BRANDS", None), kind)]
     conn = connect(options["database"])
     try:
         with turn, open_page(options["channel"], options["headless"]) as page:
@@ -69,10 +72,10 @@ def _run_store(store, state, hunt, options, turn):
             skip = listings.ignored_urls(conn, hunt["id"], store.KEY)
             per_phrase = math.ceil(options["limit"] / len(phrases))
             hits = {}
-            for phrase in phrases:
-                for hit in store.search(page, phrase, per_phrase, hunt.get("kind") or "laptop"):
+            for phrase, kind in phrases:
+                for hit in store.search(page, phrase, per_phrase, kind):
                     if hit.url not in skip:
-                        hits.setdefault(hit.url, hit)
+                        hits.setdefault(hit.url, (hit, kind))
                 state["found"] = len(hits)
                 _pause()
             hits = list(hits.values())[:options["limit"]]
@@ -80,7 +83,7 @@ def _run_store(store, state, hunt, options, turn):
 
             state["phase"] = "reading"
             failures = 0
-            for hit in hits:
+            for hit, kind in hits:
                 try:
                     product = store.read(page, hit.url, pincode)
                 except Exception as error:
@@ -92,6 +95,7 @@ def _run_store(store, state, hunt, options, turn):
                 else:
                     failures = 0
                     typed = specs.normalise(product.title, product.raw_specs)
+                    typed["kind"] = kind  # remembered so a tower is not judged on screen size
                     if listings.save(conn, hunt["id"], store.KEY, product, typed, pincode):
                         state["new"] += 1
                 state["checked"] += 1
@@ -128,7 +132,7 @@ def _run(job, hunt, options):
 
 def start(hunt, options):
     """Begin a search unless one is already running for this hunt. Returns False if none could start."""
-    keys = [key for key in hunt["retailers"] if key in STORES and sells(STORES[key], hunt["brands"], hunt.get("kind") or "laptop")]
+    keys = [key for key in hunt["retailers"] if key in STORES and any(sells(STORES[key], hunt["brands"], kind) for kind in hunts.kinds(hunt))]
     if not keys:
         return False
     with _lock:

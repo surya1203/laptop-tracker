@@ -59,7 +59,9 @@ def evaluate(hunt, listing):
                or _mentions(cpu_text, hunt["cpu_family"] or "")),
         _state(hunt["cpu_model"], cpu_text.strip(), _mentions(cpu_text, hunt["cpu_model"] or "")),
     )
-    chip(" ".join(p for p in (specs.get("cpu_family") or specs.get("cpu_brand"), specs.get("cpu_model")) if p), cpu, "CPU")
+    cores = specs.get("cpu_cores")
+    chip(" ".join(p for p in (specs.get("cpu_family") or specs.get("cpu_brand"), specs.get("cpu_model"),
+                              f"{cores}-core" if cores else None) if p), cpu, "CPU")
 
     gpu_model, gpu_text = specs.get("gpu_model"), specs.get("gpu_text") or ""
     known_models = {m.lower() for models in catalog.GPU_MODELS.values() for m in models}
@@ -73,7 +75,8 @@ def evaluate(hunt, listing):
                (specs.get("gpu_brand") or "").lower() == (hunt["gpu_brand"] or "").lower()),
         _state(wanted_models, gpu_model or gpu_text.strip(), model_ok),
     )
-    chip(gpu_model or specs.get("gpu_brand"), gpu, "GPU")
+    cores = specs.get("gpu_cores")
+    chip(f"{cores}-core GPU" if cores and gpu_model == "Apple integrated" else gpu_model or specs.get("gpu_brand"), gpu, "GPU")
 
     def at_least(field, wanted_value, text, missing):
         value = specs.get(field)
@@ -99,6 +102,13 @@ def evaluate(hunt, listing):
     state = _state(hunt["storage_interface"], exact, exact == hunt["storage_interface"])
     if hunt["storage_interface"] or interface:
         chip(interface if state != UNKNOWN else None, state, hunt["storage_interface"] or "Interface")
+
+    # A tower has no screen or carrying weight, so those filters are not held against it.
+    tower = specs.get("kind") == "tower"
+    if tower:
+        hunt = {**hunt, "screen_min_in": None, "screen_max_in": None, "resolution_min": None, "refresh_min_hz": None,
+                "panels": [], "weight_max_kg": None}
+        chips.insert(0, ("Tower PC", PLAIN))
 
     screen = specs.get("screen_in")
     low, high = hunt["screen_min_in"], hunt["screen_max_in"]

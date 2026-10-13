@@ -86,12 +86,12 @@
             <div class="flex flex-wrap gap-2">
                 {% for key, label in catalog.KINDS %}
                 <label class="cursor-pointer">
-                    <input type="radio" class="peer sr-only" name="kind" value="{{ key }}" {{ 'checked' if (hunt.kind or 'laptop') == key }}>
+                    <input type="checkbox" class="peer sr-only" name="kinds" value="{{ key }}" {{ 'checked' if (hunt.kind or 'laptop') in (key, 'both') }}>
                     <span class="inline-flex rounded-full border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:border-slate-400 peer-checked:border-emerald-600 peer-checked:bg-emerald-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:peer-checked:border-emerald-600 dark:peer-checked:text-white dark:peer-focus-visible:ring-offset-slate-900">{{ label }}</span>
                 </label>
                 {% endfor %}
             </div>
-            <p class="muted mt-2 text-xs">A tower PC is a desktop without a screen of its own; all-in-ones are left out.</p>
+            <p class="muted mt-2 text-xs">Pick one or both. A tower PC is a desktop without a screen of its own; all-in-ones are left out.</p>
         </fieldset>
     </div>
 
@@ -211,7 +211,7 @@
             {% endfor %}
         </div>
         <p class="muted mt-2 text-xs">A brand's own store is searched only when the hunt includes that brand, or has no brand filter.</p>
-        <p class="muted mt-1 hidden text-xs" data-tower-only>The ASUS, Acer, Apple and Samsung stores do not sell tower PCs, so a tower hunt skips them.</p>
+        <p class="muted mt-1 hidden text-xs" data-tower-only>The ASUS, Acer and Samsung stores do not sell tower PCs, so they are searched for laptops only.</p>
         {{ error('retailers') }}
     </fieldset>
     {% endcall %}

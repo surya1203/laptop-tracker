@@ -43,6 +43,10 @@ def save(conn, hunt_id, retailer, product, specs, pincode):
 def record(conn, listing_id, product, specs, pincode):
     """Refresh a tracked listing from a scheduled re-check and add its price point."""
     stamp = now()
+    before = conn.execute("SELECT specs FROM listings WHERE id = ?", (listing_id,)).fetchone()
+    kind = json.loads((before["specs"] if before else None) or "{}").get("kind")
+    if kind and "kind" not in specs:
+        specs = {**specs, "kind": kind}  # the store page does not say laptop or tower; the search did
     deliverable = None if product.deliverable is None else int(product.deliverable)
     conn.execute(
         "UPDATE listings SET title = ?, image_url = COALESCE(?, image_url), model_number = COALESCE(?, model_number), "

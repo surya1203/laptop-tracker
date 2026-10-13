@@ -121,7 +121,7 @@ def test_a_tower_hunt_searches_for_desktops_at_the_stores_that_sell_them():
     hunt.update(kind="tower", brands=["Lenovo"], gpu_models=["RTX 5070"])
     assert search.queries(hunt) == ["Lenovo RTX 5070 desktop"]
     assert sells(STORES["amazon"], [], "tower") and sells(STORES["lenovo"], ["Lenovo"], "tower")
-    assert not sells(STORES["asus"], ["ASUS"], "tower") and not sells(STORES["apple"], [], "tower")
+    assert not sells(STORES["asus"], ["ASUS"], "tower") and not sells(STORES["samsung"], [], "tower")
     assert not sells(STORES["lenovo"], ["Dell"], "tower")
     assert sells(STORES["asus"], ["ASUS"])  # laptops are unaffected
 
@@ -134,13 +134,13 @@ def test_all_in_ones_are_not_towers():
 
 
 def test_a_tower_hunt_drops_screen_and_weight_filters_and_stores_without_towers():
-    form = MultiDict([("name", "Tower"), ("kind", "tower"), ("screen_min_in", "16"), ("weight_max_kg", "abc"), ("panels", "OLED"),
+    form = MultiDict([("name", "Tower"), ("kinds", "tower"), ("screen_min_in", "16"), ("weight_max_kg", "abc"), ("panels", "OLED"),
                       ("retailers", "amazon"), ("retailers", "asus"), ("retailers", "dell")])
     hunt, errors = hunts.parse_form(form)
     assert not errors
     assert (hunt["kind"], hunt["screen_min_in"], hunt["weight_max_kg"], hunt["panels"], hunt["retailers"]) == ("tower", None, None, [], ["amazon", "dell"])
     assert hunts.chips(hunt) == ["Tower PC"]
-    _, errors = hunts.parse_form(MultiDict([("name", "Tower"), ("kind", "tower"), ("retailers", "asus")]))
+    _, errors = hunts.parse_form(MultiDict([("name", "Tower"), ("kinds", "tower"), ("retailers", "asus")]))
     assert "tower" in errors["retailers"]
     assert hunts.parse_form(MultiDict([("name", "Old form"), ("retailers", "asus")]))[0]["kind"] == "laptop"
 
@@ -158,3 +158,67 @@ def test_desktop_processors_and_graphics_cards_are_read():
     assert matching.evaluate(hunt, listing)[0] == "match"
     listing["specs"] = specs.normalise("HP OMEN Desktop Ryzen 5 8400F RTX 5060 8GB", {})
     assert ("RTX 5060", "miss") in matching.evaluate(hunt, listing)[1]
+
+
+def test_a_hunt_can_look_for_laptops_and_towers_together():
+    form = MultiDict([("name", "Either"), ("kinds", "laptop"), ("kinds", "tower"), ("screen_min_in", "16"),
+                      ("gpu_models", "RTX 5070"), ("retailers", "amazon"), ("retailers", "asus")])
+    hunt, errors = hunts.parse_form(form)
+    assert not errors
+    # Both kinds keep the laptop filters and every store; each kind gets its own search phrases.
+    assert (hunt["kind"], hunt["screen_min_in"], hunt["retailers"]) == ("both", 16, ["amazon", "asus"])
+    assert hunts.kinds(hunt) == ["laptop", "tower"] and "Laptop or Tower PC" in hunts.chips(hunt)
+    assert search.queries(hunt, kind="laptop") == ["RTX 5070 laptop"] and search.queries(hunt, kind="tower") == ["RTX 5070 desktop"]
+    # A tower is not judged on the screen filter; a laptop still is.
+    found = specs.normalise("HP OMEN 16L Gaming Desktop Ryzen 5 8400F RTX 5070 12GB", {})
+    tower = {"title": "t", "price_inr": 150000, "specs": {**found, "kind": "tower"}}
+    verdict, chips = matching.evaluate(hunt, tower)
+    assert verdict == "match" and ("Tower PC", "plain") in chips and ("Screen?", "unknown") not in chips
+    laptop = {"title": "t", "price_inr": 150000, "specs": {**found, "kind": "laptop"}}
+    assert ("Screen?", "unknown") in matching.evaluate(hunt, laptop)[1]
+
+
+def test_a_recheck_keeps_what_kind_a_listing_is():
+    import json
+    import sqlite3
+
+    from tracker import listings
+    from tracker.stores.base import Product
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE listings (id INTEGER PRIMARY KEY, title, image_url, model_number, specs, raw_specs, last_seen_at, "
+                 "deliverable, delivery_note, delivery_pincode)")
+    conn.execute("CREATE TABLE price_points (id INTEGER PRIMARY KEY, listing_id, price_inr, mrp_inr, in_stock, checked_at, source)")
+    conn.execute("INSERT INTO listings (id, specs) VALUES (1, ?)", (json.dumps({"kind": "tower", "ram_gb": 16}),))
+    listings.record(conn, 1, Product(url="https://x.test/a", title="Tower", price_inr=150000), {"ram_gb": 32}, None)
+    assert json.loads(conn.execute("SELECT specs FROM listings").fetchone()[0]) == {"ram_gb": 32, "kind": "tower"}
+
+
+def test_mac_listings_give_their_chip_memory_and_display():
+    found = specs.normalise("Apple 2025 MacBook Pro Laptop with M4 Max chip with 16‑core CPU and 40‑core GPU: 16.2-inch "
+                            "Liquid Retina XDR Display, 48GB Unified Memory, 1TB SSD Storage; Space Black", {})
+    assert (found["cpu_brand"], found["cpu_family"], found["cpu_cores"], found["gpu_cores"]) == ("Apple", "M4 Max", 16, 40)
+    assert (found["gpu_brand"], found["gpu_model"]) == ("Apple", "Apple integrated")
+    assert (found["ram_gb"], found["ram_type"], found["storage_gb"], found["storage_type"]) == (48, "Unified", 1024, "SSD")
+    assert (found["screen_in"], found["resolution_px"], found["refresh_hz"], found["panel"]) == (16.2, "3456 × 2234", 120, "Mini-LED")
+    # What a listing leaves out about a MacBook's screen is filled in from the line it belongs to.
+    air = specs.normalise("Apple MacBook Air (13-inch, Apple M4 chip with 10-core CPU and 8-core GPU, 16GB Unified Memory, 256GB) - Midnight", {})
+    assert (air["ram_gb"], air["storage_gb"], air["resolution"], air["refresh_hz"], air["panel"], air["weight_kg"]) == (16, 256, "QHD+", 60, "IPS", 1.24)
+    # A chip newer than the catalog is still named.
+    assert specs.normalise("Apple Mac mini, M9 Pro Chip, 12-core CPU, 32GB memory, 1TB storage", {})["cpu_family"] == "M9 Pro"
+    # Other brands are left alone.
+    other = specs.normalise("Lenovo Legion 5 Ryzen 7 RTX 5070 16GB RAM 1TB SSD 16 inch", {})
+    assert (other["ram_type"], other["gpu_model"], other["cpu_cores"], other["refresh_hz"]) == (None, "RTX 5070", None, None)
+
+
+def test_apples_store_sells_the_mac_mini_and_mac_studio_as_towers():
+    assert sells(STORES["apple"], ["Apple"], "tower") and apple.LINES["tower"] == ("mac-mini", "mac-studio")
+    assert apple._name("https://www.apple.com/in/shop/buy-mac/mac-mini/m6-chip-12-core-cpu-12-core-gpu-16gb-memory-"
+                       "256gb-storage") == "Apple Mac mini M6 chip 12 core CPU 12 core GPU 16GB memory 256GB storage"
+    hunt = hunts.blank()
+    hunt.update(kind="tower", brands=["Apple"], cpu_family="M6", ram_min_gb=24, ram_type="Unified")
+    found = specs.normalise("Apple Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 32GB memory, 1TB storage",
+                            {"Brand": "Apple", "Processor": "Apple M6", "RAM": "32GB", "Storage": "1TB SSD"})
+    verdict, chips = matching.evaluate(hunt, {"title": "t", "price_inr": 207900, "specs": {**found, "kind": "tower"}})
+    assert verdict == "match" and ("M6 12-core", "match") in chips and ("12-core GPU", "plain") in chips

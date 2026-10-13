@@ -51,7 +51,11 @@ A brand's own store is searched only when the hunt includes that brand or has no
 
 ### Tower PCs
 
-A hunt is for laptops or for tower PCs (desktops without a screen of their own; all-in-ones are left out). A tower hunt has no screen or weight filters and is searched at seven stores: Amazon, Flipkart, Croma, Vijay Sales, Reliance Digital, the Lenovo Store and the Dell Store. The ASUS, Acer, Apple and Samsung stores list no towers. When this was tried in October 2026, Croma, Vijay Sales and Reliance Digital stocked only the Mac mini and Mac Studio outside all-in-ones.
+A hunt is for laptops, tower PCs or both (a tower is a desktop without a screen of its own; all-in-ones are left out). Screen and weight filters apply to laptops only. Towers are searched at eight stores: Amazon, Flipkart, Croma, Vijay Sales, Reliance Digital, the Lenovo Store, the Dell Store and the Apple Store (Mac mini and Mac Studio). The ASUS, Acer and Samsung stores list no towers. When this was tried in October 2026, Croma, Vijay Sales and Reliance Digital stocked only the Mac mini and Mac Studio outside all-in-ones.
+
+### Macs
+
+Macs are filtered like any other machine: pick Apple as the brand, an M-series chip (M1 to M6, including Pro, Max and Ultra), and a memory size; "Unified" is the memory type every Apple chip uses. A Mac listing's CPU and GPU core counts are shown on its card. Listings rarely state a MacBook's display, so its resolution, refresh rate, panel and weight are filled in from the line and size (for example a 16-inch MacBook Pro is 3456 × 2234, 120 Hz, Mini-LED).
 
 Notes on individual stores:
 

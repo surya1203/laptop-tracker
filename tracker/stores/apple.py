@@ -1,4 +1,4 @@
-"""Apple India's own store (apple.com/in): every MacBook configuration has its own page with a price."""
+"""Apple India's own store (apple.com/in): every Mac configuration has its own page with a price."""
 import re
 
 from .base import Hit, Product, StoreError, clean, ld_offer, ld_product, without_brand
@@ -7,10 +7,10 @@ KEY = "apple"
 LABEL = "Apple Store"
 BRANDS = ("Apple",)
 HOME = "https://www.apple.com/in/shop/buy-mac"
-LINES = ("macbook-air", "macbook-pro")
+LINES = {"laptop": ("macbook-air", "macbook-pro"), "tower": ("mac-mini", "mac-studio")}
 COLOURS = r"silver|space-black|space-grey|space-gray|midnight|starlight|sky-blue|gold|blue|pink|green|yellow"
 
-_LINKS_JS = """() => [...new Set([...document.querySelectorAll('a[href*="/in/shop/buy-mac/macbook"]')].map((a) => a.href.split('?')[0]))]"""
+_LINKS_JS = """() => [...new Set([...document.querySelectorAll('a[href*="/in/shop/buy-mac/mac"]')].map((a) => a.href.split('?')[0]))]"""
 
 
 def prepare(page, pincode):
@@ -23,12 +23,12 @@ def _name(url):
     line, slug = url.rstrip("/").rsplit("/", 2)[-2:]
     words = slug.replace("-inch", "-inch,").replace("-apple-", "-Apple-").split("-")
     text = " ".join(word.upper() if re.fullmatch(r"m\d|\d+(gb|tb)|cpu|gpu", word) else word for word in words)
-    return clean(f"Apple {line.replace('-', ' ').title().replace('Macbook', 'MacBook')} {text}")
+    return clean(f"Apple {line.replace('-', ' ').title().replace('Macbook', 'MacBook').replace('Mini', 'mini')} {text}")
 
 
 def search(page, query, limit, kind="laptop"):
-    wanted = without_brand(query, "Apple").lower()
-    lines = [line for line in LINES if line.split("-")[1] in wanted] or LINES
+    wanted = re.sub(r"\bdesktop\b", " ", without_brand(query, "Apple").lower()).strip()
+    lines = [line for line in LINES[kind] if line.split("-")[1] in wanted] or LINES[kind]
     found = {}
     for line in lines:
         page.goto(f"{HOME}/{line}", wait_until="domcontentloaded", timeout=45000)
@@ -55,7 +55,7 @@ def read(page, url, pincode):
     specs = {"Brand": "Apple", "Graphics": "Apple integrated"}
     for label, pattern, shape in (
         ("Processor", r"\b(M\d(?: Pro| Max| Ultra)?) chip", "Apple {}"), ("RAM", r"(\d+\s*GB) (?:unified )?memory", "{}"),
-        ("Storage", r"(\d+\s*(?:GB|TB)) (?:SSD )?storage", "{} SSD"), ("Screen Size", r"(\d{2}(?:\.\d)?)\s*(?:\"|”|-inch| inch)", "{} inch"),
+        ("Storage", r"(\d+\s*(?:GB|TB)) (?:SSD )?storage", "{} SSD"), ("Screen Size", r"(\d{2}(?:\.\d)?)\s*(?:\"|”|″|-inch| inch)", "{} inch"),
     ):
         match = re.search(pattern, name, re.I)
         if match:
