@@ -63,6 +63,11 @@
                         {% if l.hunt_status == 'paused' %}<span class="badge badge-paused">Hunt paused: not checked</span>{% endif %}
                     </div>
                     <h3 class="mt-1.5 line-clamp-2 text-sm font-medium" title="{{ l.title }}">{{ l.title }}</h3>
+                    {% if l.chips %}
+                    <div class="mt-1.5 flex flex-wrap gap-1.5">
+                        {% for text, state in l.chips %}<span class="chip {{ 'chip-' ~ state if state != 'plain' }}">{{ text }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
                     <p class="muted mt-1 text-xs">
                         <a class="hover:underline" href="{{ url_for('main.hunt_detail', hunt_id=l.hunt_id, tab='tracked') }}">{{ l.hunt_name }}</a>
                         · checked {{ l.checked_at|when }} · {{ l.checks }} check{{ '' if l.checks == 1 else 's' }}

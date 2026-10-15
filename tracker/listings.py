@@ -1,7 +1,7 @@
 """Listings: product pages found for a hunt. Storage and the grouping the results page shows."""
 import json
 
-from . import history, matching
+from . import history, hunts, matching
 from .db import get_db, now
 from .specs import squash
 
@@ -83,9 +83,14 @@ def tracked():
         WHERE l.state = 'tracked' AND h.deleted_at IS NULL
         """
     ).fetchall()
-    groups = {}
+    groups, wanted = {}, {}
     for row in rows:
         listing = dict(row)
+        listing["specs"] = json.loads(listing["specs"] or "{}")
+        if listing["hunt_id"] not in wanted:
+            wanted[listing["hunt_id"]] = hunts.get(listing["hunt_id"])
+        # The same spec chips as on the hunt page, marked against the hunt that found the listing.
+        listing["chips"] = matching.evaluate(wanted[listing["hunt_id"]], listing)[1]
         listing.update(history.summary(points(db, listing["id"])))
         if listing["price_inr"] and listing["mrp_inr"] and listing["mrp_inr"] > listing["price_inr"]:
             listing["discount"] = round(100 * (1 - listing["price_inr"] / listing["mrp_inr"]))
