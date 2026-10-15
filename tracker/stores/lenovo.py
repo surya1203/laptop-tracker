@@ -41,6 +41,12 @@ def search(page, query, limit, kind="laptop"):
     if kind == "tower" and text != kind:
         # Laptops crowd a search out ("RTX 5070" alone brings back no desktops), so the towers are listed as well.
         found += _products(page, kind, 40)
+    # Lenovo lists its build-your-own models first, and their names give no GPU. Only the first few results of
+    # a search are read, so ready-made models that name the searched GPU ("RTX 5070", not "RTX 5070 Ti") go first.
+    gpu = re.search(r"\b(?:rtx|gtx|rx|arc)\s*[a-z]?\d{3,4}[a-z]?(?:\s*(?:ti|super|xt)\b)?", text, re.I)
+    if gpu:
+        named = re.compile(rf"(?<![a-z0-9]){re.escape(gpu.group(0)).replace(r'\ ', r'\s*')}(?!\s*(?:ti|super|xt)\b)(?![a-z0-9])", re.I)
+        found.sort(key=lambda item: not named.search(_title(item)))
     hits, seen = [], set()
     for item in found:
         if not item.get("url") or not item.get("productCode") or item["productCode"] in seen:
